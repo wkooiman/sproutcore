@@ -102,6 +102,12 @@ SC.InlineTextFieldView = SC.TextFieldView.extend(SC.DelegateSupport,
     
     var layout={}, pane, delLayout, paneElem;
     
+    this._delegate = options.delegate ;
+    var del = this._delegate ;
+    
+    // continue only if the delegate allows it
+    if (!this.invokeDelegateMethod(del, 'inlineEditorShouldBeginEditing', this)) return;
+    
     // end existing editing if necessary
     this.beginPropertyChanges();
     if (this.get('isEditing') && !this.blurEditor()) {
@@ -165,8 +171,6 @@ SC.InlineTextFieldView = SC.TextFieldView.extend(SC.DelegateSupport,
     pane.appendChild(this);
     
     SC.RunLoop.begin().end();
-    
-    var del = this._delegate ;
 
     this._className = this.getDelegateProperty(del,"inlineEditorClassName");
     if(this._className && !this.hasClassName(this._className)) {
