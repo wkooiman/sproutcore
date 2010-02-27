@@ -402,8 +402,8 @@ SC.Animatable = {
         this.transitions["left"] && this.transitions["top"] && 
         this.transitions["left"].duration == this.transitions["top"].duration &&
         this.transitions["left"].timing == this.transitions["top"].timing &&
-        (!newStyle["right"] || newStyle["right"] == "") &&
-        (!newStyle["bottom"] || newStyle["bottom"] == "") 
+        (!newStyle["right"] || newStyle["right"] === "") &&
+        (!newStyle["bottom"] || newStyle["bottom"] === "") 
       ) {
         specialTransform = YES;
         timing_function = this.cssTimingStringFor(this.transitions["left"]);
@@ -1120,7 +1120,7 @@ Test for CSS transition capability...
   // prepare css
   var css = "", i = null;
   for (i = 0; i < css_browsers.length; i++) {
-    css += css_browsers[i] + "transition:all 1s linear;"
+    css += css_browsers[i] + "transition:all 1s linear;";
     css += css_browsers[i] + "transform: translate3d(1px, 1px, 1px)";
   }
 

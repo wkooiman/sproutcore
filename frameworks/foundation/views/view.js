@@ -201,6 +201,39 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
   routeTouch: YES,
   
   // ..........................................................
+  // THEME SUPPORT
+  // 
+  
+  /**
+    @private
+    The theme to use.
+  */
+  _theme: null,
+  
+  _themeProperty: function(key, value) {
+    if (value !== undefined) {
+      // find
+      var theme = SC.Theme.find(value);
+      if (theme) this._theme = theme;
+    }
+    
+    if (this._theme) return this._theme;
+    
+    var parent = this.get("parentView");
+    if (parent) {
+      return parent.get("theme");
+    }
+    
+    return null;
+  }.property("parentView").cacheable(),
+  
+  /**
+    The current theme. You may only set this to a string, and during runtime, the value
+    (from get()) will always be a theme object or null.
+  */
+  theme: null,
+  
+  // ..........................................................
   // IS ENABLED SUPPORT
   // 
   
@@ -770,20 +803,29 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     @returns {SC.View} receiver 
   */
   updateLayer: function() {
-    var context = this.renderContext(this.get('layer')) ;
-    this.prepareContext(context, NO) ;
-    context.update() ;
-    if (context._innerHTMLReplaced) {
-      var pane = this.get('pane');
-      if(pane && pane.get('isPaneAttached')) {
-        this._notifyDidAppendToDocument();
+    var renderer;
+    if (renderer = this.renderer) {
+      this.updateRenderer(renderer);
+      renderer.attachLayer(this.get("layer"));
+      renderer.update();
+    } else {
+      var context = this.renderContext(this.get('layer')) ;
+      this.prepareContext(context, NO) ;
+      context.update() ;
+      if (context._innerHTMLReplaced) {
+        var pane = this.get('pane');
+        if(pane && pane.get('isPaneAttached')) {
+          this._notifyDidAppendToDocument();
+        }
       }
     }
+    
     if (this.didUpdateLayer) this.didUpdateLayer(); // call to update DOM
     if(this.designer && this.designer.viewDidUpdateLayer) {
       this.designer.viewDidUpdateLayer(); //let the designer know
     }
     return this ;
+    
   },
   
   /**
@@ -869,6 +911,9 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
       // layer property to null.
       this._notifyWillDestroyLayer() ;
       
+      // tell the renderer
+      this.renderer.detachLayer();
+      
       // do final cleanup
       if (layer.parentNode) layer.parentNode.removeChild(layer) ;
       layer = null ;
@@ -920,12 +965,17 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     @returns {void}
   */
   prepareContext: function(context, firstTime) {
-    var mixins, len, idx, layerId, bgcolor, cursor;
-  
+    // eventually, firstTime will be removed because it is ugly.
+    // for now, we will sense whether we are doing things the ugly way or not.
+    // if ugly, we will allow updates through.
+    if (SC.none(firstTime)) firstTime = YES; // the GOOD code path :)
+    
+    /*var mixins, len, idx, layerId, bgcolor, cursor, classArray=[];
+
     // do some initial setup only needed at create time.
     if (firstTime) {
       // TODO: seems like things will break later if SC.guidFor(this) is used
-  
+
       layerId = this.layerId ? this.get('layerId') : SC.guidFor(this) ;
       context.id(layerId).classNames(this.get('classNames'), YES) ;
       this.renderLayout(context, firstTime) ;
@@ -933,27 +983,52 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
       context.resetClassNames();
       context.classNames(this.get('classNames'), YES);  
     }
-  
+
     // do some standard setup...
-    if (this.get('isTextSelectable')) context.addClass('allow-select') ;
-    if (!this.get('isEnabled')) context.addClass('disabled') ;
-    if (!this.get('isVisible')) context.addClass('hidden') ;
-    if (this.get('isFirstResponder')) context.addClass('focus');
-  
+    if (this.get('isTextSelectable')) classArray.push('allow-select') ;
+    if (!this.get('isEnabled')) classArray.push('disabled') ;
+    if (!this.get('isVisible')) classArray.push('hidden') ;
+    if (this.get('isFirstResponder')) classArray.push('focus');
+
     bgcolor = this.get('backgroundColor');
     if (bgcolor) context.addStyle('backgroundColor', bgcolor);
-  
+
     cursor = this.get('cursor') ;
-    if (cursor) context.addClass(cursor.get('className')) ;
-  
+    if (cursor) classArray.push(cursor.get('className')) ;
+
+    context.addClass(classArray);*/
+    if (!this.viewRenderer) this.viewRenderer = this.createViewRenderer();
+    if (firstTime) {
+      this.viewRenderer.render(context);
+    } else {
+      this.viewRenderer.update();
+    }
+    
+    // TODO: MOVE ALL ASPECTS RELATING TO UPDATING LAYERS TO updateLayer; IN FUTURE, CONTEXTS
+    // SHOULD ONLY BE USED FOR INITIAL RENDERS.
     this.beginPropertyChanges() ;
     this.set('layerNeedsUpdate', NO) ;
-    this.render(context, firstTime) ;
-    if (mixins = this.renderMixin) {
-      len = mixins.length;
-      for(idx=0; idx<len; ++idx) mixins[idx].call(this, context, firstTime) ;
+    if (this.createRenderer) {
+      if (!this.renderer) this.renderer = this.createRenderer();
+      
+      // sometimes, alas, we get called expecting to update. If not, we use the viewRenderer.
+      if (firstTime) {
+        this.renderer.render(context); // that's the way I like it
+      } else {
+        this.renderer.attachLayer(this.get("layer")); // still gotta figure out what to do with layers.
+        this.renderer.update();
+      }
+      
+    } else {
+      this.render(context, firstTime) ;
+      var mixins, len, idx;
+      if (mixins = this.renderMixin) {
+        len = mixins.length;
+        for(idx=0; idx<len; ++idx) mixins[idx].call(this, context, firstTime) ;
+      }
     }
     this.endPropertyChanges() ;
+    
   },
   
   /**
@@ -1422,6 +1497,11 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     var parentView, path, root, idx, len, lp, dp ;
     
     sc_super() ;
+    
+    // set up theme
+    var theme = this.theme;
+    this.theme = this._themeProperty;
+    this.set("theme", theme);
     
     // register for event handling now if we're not a materialized view
     // (materialized views register themselves as needed)
