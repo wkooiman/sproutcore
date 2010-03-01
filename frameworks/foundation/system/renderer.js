@@ -51,7 +51,7 @@ SC.Renderer = SC.Renderer = {
   // Functions that may be called by subclasses
   //
   $: function(sel) {
-    var ret, layer = this.layer;
+    var ret, layer = this.layer();
     // note: SC.$([]) returns an empty CoreQuery object.  SC.$() would 
     // return an object selecting the document.
     ret = !layer ? SC.$([]) : (sel === undefined) ? SC.$(layer) : SC.$(sel, layer) ;
@@ -72,19 +72,46 @@ SC.Renderer = SC.Renderer = {
 
   /**
     Call this to attach the renderer to a layer.
+    If the layer is a layer provider (views, for instance, are layer providers), then
+    the layer provider will be saved, allowing lazy-access.
   */
   attachLayer: function(layer) {
-    if (this.layer && this.layer === layer) return; // nothing to do
-    if (this.layer) this.detachLayer();
-    this.layer = layer;
-    this.didAttachLayer();
+    // if there is any layer or layer provider, we must detach (because we would attach if it were the other way around)
+    if (this._layer || this._layerProvider) this.detachLayer();
     
-    layer = null; // avoid memory leak.
+    if (layer.isLayerProvider) {
+      // layer provider case: we just set the layer provider and move on
+      this._layerProvider = layer;
+    } else {
+      // otherwise, set layer
+      this._layer = layer;
+    }
+    
+    // and, as we said, even though we did not necessarily set the real layer, we will act as if we did.
+    // we're lazy. that doesn't mean we don't do anything. we just don't do it 'til the last minute.
+    this.didAttachLayer();
   },
   
+  /**
+    Called to detach the renderer from a layer.
+  */
   detachLayer: function() {
-    this.layer = null;
     this.willDetachLayer();
+    this._layer = null;
+    this._layerProvider = null;
+  },
+  
+  /**
+    Gets the layer, either from the layer set on the renderer itself, or from the renderer's layer
+    provider (if any).
+  */
+  layer: function(layer) {
+    if (this._layer) return this._layer;
+    if (this._layerProvider) {
+      this._layer = this._layerProvider.getLayer();
+      return this._layer;
+    }
+    return null;
   },
   
   /**
