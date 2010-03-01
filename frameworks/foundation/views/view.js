@@ -797,13 +797,22 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     @returns {SC.View} receiver 
   */
   updateLayer: function() {
-    var context = this.renderContext(this.get('layer')) ;
-    this.prepareContext(context, NO) ;
-    context.update() ;
-    if (context._innerHTMLReplaced) {
-      var pane = this.get('pane');
-      if(pane && pane.get('isPaneAttached')) {
-        this._notifyDidAppendToDocument();
+    var renderer;
+    if (renderer = this.renderer) {
+      this.viewRenderer.update();
+      this.updateRenderer(renderer); // renderers always update.
+      renderer.update();
+    } else {
+      this.viewRenderer.update();
+      
+      var context = this.renderContext(this.get('layer')) ;
+      this.render(context, NO); // render function may update. On other hand, may replace HTML. Hm.
+      context.update() ;
+      if (context._innerHTMLReplaced) {
+        var pane = this.get('pane');
+        if(pane && pane.get('isPaneAttached')) {
+          this._notifyDidAppendToDocument();
+        }
       }
     }
     if (this.didUpdateLayer) this.didUpdateLayer(); // call to update DOM
@@ -896,6 +905,10 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
       // layer property to null.
       this._notifyWillDestroyLayer() ;
       
+      // tell the renderer
+      if (this.renderer) this.renderer.detachLayer();
+      this.viewRenderer.detachLayer();
+      
       // do final cleanup
       if (layer.parentNode) layer.parentNode.removeChild(layer) ;
       layer = null ;
@@ -935,6 +948,42 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
   },
   
   /**
+    Renders to a context.
+    Rendering only happens for the initial rendering. Further updates
+    happen in updateLayer, and are not done to contexts, but to layers.
+    
+    Both renderToContext and updateLayer will call render(context, firstTime) as needed
+    to maintain backwards compatibility.
+    
+    Note: You should not generally override nor directly call this method. This method is only
+    called by createLayer to set up the layer initially, and by renderChildViews, to write to
+    a context.
+  */
+  renderToContext: function(context) {
+    this.beginPropertyChanges() ;
+    this.set('layerNeedsUpdate', NO) ;
+    
+    // first, render view stuff.
+    if (!this.viewRenderer) this.viewRenderer = this.createViewRenderer();
+    this.viewRenderer.renderToContext(context);
+    
+    // now, if we have a createRenderer function, use that
+    if (this.createRenderer) {
+      if (!this.renderer) this.renderer = this.createRenderer();
+      this.renderer.renderToContext(context);
+    } else {
+      this.render(context, YES);
+      var mixins, len, idx;
+      if (mixins = this.renderMixin) {
+        len = mixins.length;
+        for(idx=0; idx<len; ++idx) mixins[idx].call(this, context, YES) ;
+      }
+    }
+    
+    this.endPropertyChanges() ;
+  },
+  
+  /**
     Invoked by createLayer() and updateLayer() to actually render a context.
     This method calls the render() method on your view along with any 
     renderMixin() methods supplied by mixins you might have added.
@@ -947,8 +996,18 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     @returns {void}
   */
   prepareContext: function(context, firstTime) {
-    var mixins, len, idx, layerId, bgcolor, cursor;
-  
+    // eventually, firstTime will be removed because it is ugly.
+    // for now, we will sense whether we are doing things the ugly way or not.
+    // if ugly, we will allow updates through.
+    if (SC.none(firstTime)) firstTime = YES; // the GOOD code path :)
+    if (firstTime) {
+      this.renderToContext(context);
+    } else {
+      this.updateLayer();
+    }
+    
+    /*var mixins, len, idx, layerId, bgcolor, cursor, classArray=[];
+
     // do some initial setup only needed at create time.
     if (firstTime) {
       // TODO: seems like things will break later if SC.guidFor(this) is used
