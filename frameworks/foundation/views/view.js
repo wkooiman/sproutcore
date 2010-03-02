@@ -1150,34 +1150,6 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     } else {
       this.updateLayer();
     }
-    
-    /*var mixins, len, idx, layerId, bgcolor, cursor, classArray=[];
-
-    // do some initial setup only needed at create time.
-    if (firstTime) {
-      // TODO: seems like things will break later if SC.guidFor(this) is used
-
-      layerId = this.layerId ? this.get('layerId') : SC.guidFor(this) ;
-      context.id(layerId).classNames(this.get('classNames'), YES) ;
-      this.renderLayout(context, firstTime) ;
-    }else{
-      context.resetClassNames();
-      context.classNames(this.get('classNames'), YES);  
-    }
-
-    // do some standard setup...
-    if (this.get('isTextSelectable')) classArray.push('allow-select') ;
-    if (!this.get('isEnabled')) classArray.push('disabled') ;
-    if (!this.get('isVisible')) classArray.push('hidden') ;
-    if (this.get('isFirstResponder')) classArray.push('focus');
-
-    bgcolor = this.get('backgroundColor');
-    if (bgcolor) context.addStyle('backgroundColor', bgcolor);
-
-    cursor = this.get('cursor') ;
-    if (cursor) classArray.push(cursor.get('className')) ;
-
-    context.addClass(classArray);*/
   },
   
   /**
@@ -1192,15 +1164,43 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     @test in render
   */
   renderChildViews: function(context, firstTime) {
+    if (firstTime) {
+      this.renderContent(context);
+    } else {
+      this.updateContent();
+    }
+  },
+  
+  /**
+    @private
+    Views are content suppliers for renderers. That is, views pass themselves to renderers
+    for renderers' "content" properties. Content providers have two functions: renderContent and updateContent.
+    This is the first of those.
+  */
+  renderContent: function(context) {
     var cv = this.get('childViews'), len = cv.length, idx, view ;
     for (idx=0; idx<len; ++idx) {
       view = cv[idx] ;
       if (!view) continue;
       context = context.begin(view.get('tagName')) ;
-      view.prepareContext(context, firstTime) ;
+      view.renderToContext(context);
       context = context.end() ;
     }
-    return context ;  
+  },
+  
+  /**
+    @private
+    Views are content suppliers for renderers. That is, views pass themselves to renderers
+    for renderers' "content" properties. Content providers have two functions: renderContent and updateContent.
+    This is the first of those.
+  */
+  updateContent: function() {
+    var cv = this.get('childViews'), len = cv.length, idx, view ;
+    for (idx=0; idx<len; ++idx) {
+      view = cv[idx] ;
+      if (!view) continue;
+      view.updateLayer();
+    }
   },
   
   /**
