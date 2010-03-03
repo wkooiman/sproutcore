@@ -79,7 +79,6 @@ require('views/view');
   @since SproutCore 1.0
 */
 SC.Pane = SC.View.extend( /** @scope SC.Pane.prototype */ {
-
   /** 
     Returns YES for easy detection of when you reached the pane. 
     @property {Boolean}
