@@ -86,38 +86,53 @@ SC.StaticLayout = {
   
   /**
     clippingFrame is not available on views with static layout.  This 
-    property will always return null.
+    property will return null.
     
     @function
   */
-  clippingFrame: null,
+  clippingFrame: function() {
+    if (this.get('useStaticLayout')) return null;
+    sc_super();
+  },
   
   /**
     This method is not supported on static layout views.
     
     @function
   */
-  parentViewDidResize: null,
+  parentViewDidResize: function() {
+    if (this.get('useStaticLayout')) return null;
+    sc_super();
+  },
   
   /**
     This method is not supported on static layout views.
     
     @function
   */
-  beginLiveResize: null,
+  beginLiveResize: function() {
+    if (this.get('useStaticLayout')) return null;
+    sc_super();
+  },
 
   /**
     This method is not supported on static layout views.
     
     @function
   */
-  endLiveResize: null,
+  endLiveResize: function() {
+    if (this.get('useStaticLayout')) return null;
+    sc_super();
+  },
 
   /**
     This method is not supported on static layout views.
     
     @function
   */
-  viewDidResize: null
+  viewDidResize: function() {
+    if (this.get('useStaticLayout')) return null;
+    sc_super();
+  }
   
 };
