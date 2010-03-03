@@ -86,7 +86,7 @@ SC.StaticLayout = {
   
   /**
     clippingFrame is not available on views with static layout.  This 
-    property will return null.
+    property will return null if useStaticLayout is true.
     
     @function
   */
@@ -96,7 +96,8 @@ SC.StaticLayout = {
   },
   
   /**
-    This method is not supported on static layout views.
+    This method is not supported on static layout views. This 
+    method will return null if useStaticLayout is true.
     
     @function
   */
@@ -106,7 +107,8 @@ SC.StaticLayout = {
   },
   
   /**
-    This method is not supported on static layout views.
+    This method is not supported on static layout views. This 
+    method will return null if useStaticLayout is true.
     
     @function
   */
@@ -116,7 +118,8 @@ SC.StaticLayout = {
   },
 
   /**
-    This method is not supported on static layout views.
+    This method is not supported on static layout views. This 
+    method will return null if useStaticLayout is true.
     
     @function
   */
@@ -126,7 +129,8 @@ SC.StaticLayout = {
   },
 
   /**
-    This method is not supported on static layout views.
+    This method is not supported on static layout views. This 
+    method will return null if useStaticLayout is true.
     
     @function
   */
