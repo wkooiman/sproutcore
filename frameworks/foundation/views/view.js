@@ -231,10 +231,6 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
       }
     }
     
-    if (ret !== this._last_theme) {
-      this._last_theme = ret;
-      if (this._hasCreatedChildViews) this._notifyThemeDidChange();
-    }
     return ret;
   }.property("parentView").cacheable(),
   
@@ -251,6 +247,21 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     (from get()) will always be a theme object or null.
   */
   theme: null,
+  
+  /**
+    Detects when the theme changes. Replaces the layer if necessary.
+  */
+  themeDidChange: function() {
+    var theme = this.get("theme");
+    if (theme === this._last_theme) return;
+    this._last_theme = theme;
+    
+    // replace the layer
+    if (this.get("layer")) this.replaceLayer();
+    
+    // notify child views
+    if (this._hasCreatedChildViews) this._notifyThemeDidChange();
+  }.observes("theme"),
   
   // ..........................................................
   // IS ENABLED SUPPORT
@@ -930,6 +941,7 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
   */
   _notifyDidCreateLayer: function() {
     // notify, not just the view, but also the view renderers
+    this.notifyPropertyChange("layer");
     if (this.renderer) this.renderer.attachLayer(this);
     if (this.didCreateLayer) this.didCreateLayer() ;
     
@@ -974,7 +986,11 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
       this._notifyWillDestroyLayer() ;
       
       // tell the renderer
-      if (this.renderer) this.renderer.detachLayer();
+      if (this.renderer) {
+        this.renderer.detachLayer();
+        this.renderer.destroy();
+        this.renderer = null;
+      }
       
       // do final cleanup
       if (layer.parentNode) layer.parentNode.removeChild(layer) ;
@@ -1339,7 +1355,7 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     @property {Array}
     @readOnly
   */
-  displayProperties: ['isFirstResponder', 'isVisible', 'theme'],
+  displayProperties: ['isFirstResponder', 'isVisible'],
   
   /**
     You can set this to an SC.Cursor instance; its class name will 
