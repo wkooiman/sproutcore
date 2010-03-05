@@ -749,6 +749,26 @@ SC.TextFieldView = SC.FieldView.extend(SC.StaticLayout, SC.Editable,
   focusIE7: function (){
     this.$input()[0].focus();
   },
+  
+  // some touch events (may be improvable, though)
+  touchStart: function(evt) {
+    if (!this.get('isEnabled')) {
+      evt.stop();
+    } else {
+      evt.allowDefault();
+    }
+    return YES;
+  },
+  
+  touchEnd: function(evt) {
+    this.notifyPropertyChange('selection');
+    if (!this.get('isEnabled')) {
+      evt.stop();
+    } else {
+      evt.allowDefault();
+    }
+    return YES;
+  },
 
   selectStart: function(evt) {
     return YES;

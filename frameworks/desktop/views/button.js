@@ -354,20 +354,77 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
     return YES ;
   },
   
-  touchStart: function(evt){
-    return this.mouseDown(evt);
-  },
   
-  touchEnd: function(evt){
-    return this.mouseUp(evt);
-  },
+  // implemented just to say we handle it
+  touchStart: function(evt) { return YES; },
   
-  touchEntered: function(evt){
-    return this.mouseEntered(evt);
-  },
+  // the important one
+  firstTouchStart: function(evt) {
+    // calculate touch frame for later.
+    this._touch_frame = this.get("parentView").convertFrameToView(this.get('frame'), null);
+    
+    var buttonBehavior = this.get('buttonBehavior');
 
-  touchExited: function(evt){
-    return this.mouseExited(evt);
+    if (!this.get('isEnabled')) return YES ; // handled event, but do nothing
+    this.set('isActive', YES);
+
+    if (buttonBehavior === SC.HOLD_BEHAVIOR) {
+      this._action(evt);
+    } else if (!this._isFocused && (buttonBehavior!==SC.PUSH_BEHAVIOR)) {
+      this._isFocused = YES ;
+      this.becomeFirstResponder();
+      if (this.get('isVisibleInWindow')) {
+        this.renderer.focus();
+      }
+    }
+    
+    // don't want to do whatever default is...
+    evt.preventDefault();
+    
+    return YES;
+  },
+  
+  // is in frame
+  touchIsInBoundary: function(evt) {
+    var f = this._touch_frame;
+    var x = evt.pageX, y = evt.pageY;
+    
+    if (x < f.x) x = f.x - x;
+    else if (x > f.x + f.width) x = x - (f.x + f.width);
+    else x = 0;
+    
+    if (y < f.y) y = f.y - y;
+    else if (y > f.y + f.height) y = y - (f.y + f.height);
+    else y = 0;
+    
+    if (x > 100 || y > 100) return NO;
+    return YES;
+  },
+  
+  // drag
+  touchDragged: function(evt) {
+    if (!this.touchIsInBoundary(evt)) {
+      if (!this._touch_exited) this.set('isActive', NO);
+      this._touch_exited = YES;
+    } else {
+      if (this._touch_exited) this.set('isActive', YES);
+      this._touch_exited = NO;
+    }
+  },
+  
+  // again, just to say we do...
+  touchEnd: function() { return YES; },
+  
+  // the important one
+  lastTouchEnd: function(evt) {
+    this._touch_exited = NO;
+    this.set('isActive', NO); // track independently in case isEnabled has changed
+
+    if (this.get('buttonBehavior') !== SC.HOLD_BEHAVIOR) {
+      if (this.touchIsInBoundary(evt)) this._action();
+    }
+
+    return YES ;
   },
   
   
