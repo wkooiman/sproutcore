@@ -355,11 +355,8 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
   },
   
   
-  // implemented just to say we handle it
-  touchStart: function(evt) { return YES; },
-  
   // the important one
-  firstTouchStart: function(evt) {
+  touchStart: function(evt) {
     // calculate touch frame for later.
     this._touch_frame = this.get("parentView").convertFrameToView(this.get('frame'), null);
     
@@ -412,11 +409,8 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
     }
   },
   
-  // again, just to say we do...
-  touchEnd: function() { return YES; },
-  
   // the important one
-  lastTouchEnd: function(evt) {
+  touchEnd: function(evt) {
     this._touch_exited = NO;
     this.set('isActive', NO); // track independently in case isEnabled has changed
 
