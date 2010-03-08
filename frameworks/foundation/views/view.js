@@ -318,6 +318,11 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
   */
   acceptsMultitouch: NO,
   
+  /**
+    Is YES if the view is currently being touched. NO otherwise.
+  */
+  hasTouch: NO,
+  
   // ..........................................................
   // IS VISIBLE IN WINDOW SUPPORT
   // 
