@@ -1864,8 +1864,8 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     if (lW !== undefined &&
         lW === SC.LAYOUT_AUTO &&
         stLayout !== undefined && !stLayout) {
-     error = SC.Error.desc("%@.layout() you cannot use width:auto if "+
-              "staticLayout is disabled".fmt(this),"%@".fmt(this), -1) ;
+     error = SC.Error.desc("%@.layout() you cannot use width:auto if ".fmt(this) +
+              "staticLayout is disabled","%@".fmt(this), -1) ;
      console.error(error.toString()) ;
      throw error ;
     }
@@ -1873,18 +1873,29 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     if (lH !== undefined &&
         lH === SC.LAYOUT_AUTO &&
         stLayout !== undefined && !stLayout) {
-      error = SC.Error.desc("%@.layout() you cannot use height:auto if "+
-              "staticLayout is disabled".fmt(this),"%@".fmt(this), -1) ;
+      error = SC.Error.desc("%@.layout() you cannot use height:auto if ".fmt(this) +
+              "staticLayout is disabled","%@".fmt(this), -1) ;
       console.error(error.toString())  ;
       throw error ;
     }
     
-    if (stLayout) return null; // can't compute
-
+    if (stLayout) {
+      // need layer to be able to compute rect
+      if (layer = this.get('layer')) {
+        f = SC.viewportOffset(layer); // x,y
+        /*
+          TODO Can probably have some better width/height values - CC
+        */
+        f.width = layer.offsetWidth;
+        f.height = layer.offsetHeight;
+        return f;
+      }
+      return null; // can't compute
+    }
+    
     if (!pdim) pdim = this.computeParentDimensions(layout) ;
     dH = pdim.height;
     dW = pdim.width;
-    
     
     // handle left aligned and left/right 
     if (!SC.none(lL)) {
@@ -2220,19 +2231,21 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
         lT = layout.top, 
         lB = layout.bottom, 
         lW = layout.width, 
-        lH = layout.height, 
+        lH = layout.height,
+        lMW = layout.maxWidth,
+        lMH = layout.maxHeight,
         lcX = layout.centerX, 
         lcY = layout.centerY;
     if (lW !== undefined && lW === SC.LAYOUT_AUTO && !stLayout) {
-      error= SC.Error.desc("%@.layout() you cannot use width:auto if "+
-              "staticLayout is disabled".fmt(this),"%@".fmt(this),-1);
+      error= SC.Error.desc("%@.layout() you cannot use width:auto if ".fmt(this) +
+              "staticLayout is disabled","%@".fmt(this),-1);
       console.error(error.toString()) ;
       throw error ;
     }
     
     if (lH !== undefined && lH === SC.LAYOUT_AUTO && !stLayout) {
-      error = SC.Error.desc("%@.layout() you cannot use height:auto if "+
-                "staticLayout is disabled".fmt(this),"%@".fmt(this),-1);  
+      error = SC.Error.desc("%@.layout() you cannot use height:auto if ".fmt(this) +
+                "staticLayout is disabled","%@".fmt(this),-1);  
       console.error(error.toString()) ;
       throw error ;
     }
@@ -2269,7 +2282,7 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
       ret.marginLeft = 0 ;
       
       if (SC.none(lW)) {
-        ret.left = 0;
+        if (SC.none(lMW)) ret.left = 0;
         ret.width = null;
       } else {
         ret.left = null ;
@@ -2318,7 +2331,7 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     
     // Y DIRECTION
     
-    // handle left aligned and left/right
+    // handle top aligned and left/right
     if (!SC.none(lT)) {
       if(SC.isPercentage(lT)) ret.top = (lT*100)+"%";
       else ret.top = Math.floor(lT);
@@ -2334,13 +2347,13 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
       }
       ret.marginTop = 0 ;
       
-    // handle right aligned
+    // handle bottom aligned
     } else if (!SC.none(lB)) {
       ret.marginTop = 0 ;
       if(SC.isPercentage(lB)) ret.bottom = (lB*100)+"%";
       else ret.bottom = Math.floor(lB) ;
       if (SC.none(lH)) {
-        ret.top = 0;
+        if (SC.none(lMH)) ret.top = 0;
         ret.height = null ;
       } else {
         ret.top = null ;
