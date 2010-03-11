@@ -100,12 +100,10 @@ SC.TextFieldView = SC.FieldView.extend(SC.StaticLayout, SC.Editable,
   
   _isFocused: NO,
 
-
   /** isEditable maps to isEnabled with a TextField. */
   isEditable: function() {
     return this.get('isEnabled') ;
   }.property('isEnabled').cacheable(),
-
 
   /**
     The current selection of the text field, returned as an SC.TextSelection
@@ -216,14 +214,11 @@ SC.TextFieldView = SC.FieldView.extend(SC.StaticLayout, SC.Editable,
     // whenever the field's value changes.
   }.property('fieldValue').cacheable(),
 
-
-
   // ..........................................................
   // INTERNAL SUPPORT
   //
 
   displayProperties: 'hint fieldValue isEditing leftAccessoryView rightAccessoryView isTextArea'.w(),
-
 
   createChildViews: function() {
     this.accessoryViewObserver() ;
@@ -232,7 +227,6 @@ SC.TextFieldView = SC.FieldView.extend(SC.StaticLayout, SC.Editable,
   acceptsFirstResponder: function() {
     return this.get('isEnabled');
   }.property('isEnabled'),
-
 
   accessoryViewObserver: function() {
     var classNames,
@@ -291,7 +285,6 @@ SC.TextFieldView = SC.FieldView.extend(SC.StaticLayout, SC.Editable,
     }
   }.observes('leftAccessoryView', 'rightAccessoryView'),
 
-
   layoutChildViewsIfNeeded: function(isVisible) {
     // For the right accessory view, adjust the positioning such that the view
     // is right-justified, unless 'right' is specified.
@@ -315,7 +308,6 @@ SC.TextFieldView = SC.FieldView.extend(SC.StaticLayout, SC.Editable,
 
     sc_super() ;
   },
-
 
   render: function(context, firstTime) {
     sc_super() ;
@@ -350,7 +342,6 @@ SC.TextFieldView = SC.FieldView.extend(SC.StaticLayout, SC.Editable,
     this._renderField(context, firstTime, v, leftAdjustment, rightAdjustment) ;
     if(SC.browser.mozilla) this.invokeLast(this._applyFirefoxCursorFix);
   },
-
 
   /**
     If isTextArea is changed (this might happen in inlineeditor constantly)
@@ -443,7 +434,6 @@ SC.TextFieldView = SC.FieldView.extend(SC.StaticLayout, SC.Editable,
     }
   },
 
-
   _getAccessoryViewWidths: function() {
     var widths = {},
         accessoryViewPositions = ['left', 'right'],
@@ -470,7 +460,6 @@ SC.TextFieldView = SC.FieldView.extend(SC.StaticLayout, SC.Editable,
     }
     return widths;
   },
-
 
   // ..........................................................
   // HANDLE NATIVE CONTROL EVENTS
@@ -581,11 +570,9 @@ SC.TextFieldView = SC.FieldView.extend(SC.StaticLayout, SC.Editable,
     return this ;
   },
   
-  
   _textField_selectionDidChange: function() {
     this.notifyPropertyChange('selection');
   },
-
 
   // ..........................................................
   // FIRST RESPONDER SUPPORT
@@ -633,7 +620,6 @@ SC.TextFieldView = SC.FieldView.extend(SC.StaticLayout, SC.Editable,
     sc_super();
   },
 
-
   /** @private
     Simply allow keyDown & keyUp to pass through to the default web browser
     implementation.
@@ -649,7 +635,7 @@ SC.TextFieldView = SC.FieldView.extend(SC.StaticLayout, SC.Editable,
     // handle tab key
     if (evt.which === 9) {
       var view = evt.shiftKey ? this.get('previousValidKeyView') : this.get('nextValidKeyView');
-      if(view) view.becomeFirstResponder();
+      if (view) view.becomeFirstResponder();
       else evt.allowDefault();
       return YES ; // handled
     }
@@ -681,21 +667,25 @@ SC.TextFieldView = SC.FieldView.extend(SC.StaticLayout, SC.Editable,
   },
 
   mouseDown: function(evt) {
+    var fieldValue = this.get('fieldValue'); // use 'fieldValue' since we want actual text
+
     this._txtFieldMouseDown=YES;
     if (!this.get('isEnabled')) {
       evt.stop();
       return YES;
-    } else if((this.value && this.value.length===0) || !this.value) {
+    } else if ((fieldValue && fieldValue.length === 0) || !fieldValue) {
       this.$input()[0].focus();
       return YES;
     } else {
       // This fixes the double click issue in firefox
-      if(!SC.browser.safari) this.$input()[0].focus();
+      if (!SC.browser.safari) this.$input()[0].focus();
       return sc_super();
     }
   },
 
   mouseUp: function(evt) {
+    var fieldValue = this.get('fieldValue'); // use 'fieldValue' since we want actual text
+
     this._txtFieldMouseDown=NO;
     // The caret/selection could have moved.  In some browsers, though, the
     // element's values won't be updated until after this event is finished
@@ -705,10 +695,10 @@ SC.TextFieldView = SC.FieldView.extend(SC.StaticLayout, SC.Editable,
     if (!this.get('isEnabled')) {
       evt.stop();
       return YES;
-    } else if((this.value && this.value.length===0) || !this.value) {
-      if(SC.browser.msie<8){
+    } else if ((fieldValue && fieldValue.length === 0) || !fieldValue) {
+      if (SC.browser.msie < 8) {
         this.invokeLater(this.focusIE7, 1);
-      }else{
+      } else {
         this.$input()[0].focus();
       }
       return YES;
@@ -722,4 +712,5 @@ SC.TextFieldView = SC.FieldView.extend(SC.StaticLayout, SC.Editable,
   selectStart: function(evt) {
     return YES;
   }
-}) ;
+  
+});
