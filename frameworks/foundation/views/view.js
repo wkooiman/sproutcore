@@ -323,6 +323,11 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
   */
   hasTouch: NO,
   
+  /**
+    Whether to route touch events to mouse events (defaults to YES)
+  */
+  routeTouch: YES,
+  
   // ..........................................................
   // IS VISIBLE IN WINDOW SUPPORT
   // 

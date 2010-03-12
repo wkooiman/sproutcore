@@ -354,6 +354,7 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
     return YES ;
   },
   
+  routeTouch: NO,
   
   // the important one
   touchStart: function(evt) {
@@ -407,6 +408,9 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
       if (this._touch_exited) this.set('isActive', YES);
       this._touch_exited = NO;
     }
+    
+    evt.preventDefault();
+    return YES;
   },
   
   // the important one
@@ -417,7 +421,8 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
     if (this.get('buttonBehavior') !== SC.HOLD_BEHAVIOR) {
       if (this.touchIsInBoundary(evt)) this._action();
     }
-
+    
+    evt.preventDefault();
     return YES ;
   },
   
