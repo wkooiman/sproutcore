@@ -198,8 +198,6 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
   */
   backgroundColor: null,
   
-  routeTouch: YES,
-  
   // ..........................................................
   // THEME SUPPORT
   // 
@@ -311,6 +309,11 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     Is YES if the view is currently being touched. NO otherwise.
   */
   hasTouch: NO,
+  
+  /**
+    Whether to route touch events to mouse events (defaults to YES)
+  */
+  routeTouch: YES,
   
   // ..........................................................
   // IS VISIBLE IN WINDOW SUPPORT
