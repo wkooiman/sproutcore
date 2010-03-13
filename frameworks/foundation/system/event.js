@@ -28,11 +28,13 @@ sc_require('system/core_query') ;
   @since SproutCore 1.0
 */
 SC.Event = function(originalEvent) { 
-
+  var idx, len;
   // copy properties from original event, if passed in.
   if (originalEvent) {
     this.originalEvent = originalEvent ;
-    var props = SC.Event._props, len = props.length, idx = len , key;
+    var props = SC.Event._props, key;
+    len = props.length;
+    idx = len;
     while(--idx >= 0) {
       key = props[idx] ;
       this[key] = originalEvent[key] ;
@@ -113,8 +115,26 @@ SC.Event = function(originalEvent) {
     if (target === SC.RootResponder.responder._touchInterceptElement) {
       elem.style.display = 'none';
       // document.body.removeChild(elem);
+      
+      // adjust target for whole event
       target = document.elementFromPoint(this.pageX, this.pageY);
       this.target = target;
+      
+      // adjust target for all touches in event
+      var touch;
+      len = this.touches.length;
+      for (idx = 0; idx < len; idx++) {
+        touch = this.touches[idx];
+        touch.target = document.elementFromPoint(touch.pageX, touch.pageY);
+      }
+      
+      // and the changed touches
+      len = this.changedTouches.length;
+      for (idx = 0; idx < len; idx++) {
+        touch = this.changedTouches[idx];
+        touch.target = document.elementFromPoint(touch.pageX, touch.pageY);
+      }
+      
       // document.body.appendChild(elem);
       elem.style.display = 'block';
     }
