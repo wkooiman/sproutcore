@@ -755,6 +755,13 @@ SC.Event.prototype = {
   hasCustomEventHandling: NO,
   
   /**
+    Returns the touches owned by the supplied view.
+  */
+  touchesForView: function(view) {
+    if (this.touchContext) return this.touchContext.touchesForView(view);
+  },
+  
+  /**
     Indicates that you want to allow the normal default behavior.  Sets
     the hasCustomEventHandling property to YES but does not cancel the event.
     

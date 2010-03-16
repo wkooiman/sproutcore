@@ -396,32 +396,6 @@ SC.RootResponder = SC.Object.extend({
     return ret ;
   },
 
-  /**
-    Attempts to send a touch event down the responder chain.  This differs
-    from the standard sendEvent method by supporting event methods that
-    return SC.MIXED. In this case, it will continue to bubble up the chain
-    until the end is reached or a different view returns YES.
-
-    @param {String} action
-    @param {SC.Event} evt
-    @param {Object} target
-    @returns {Array} views the views that handled the event
-  */
-  sendTouchEvent: function(action, evt, target) {
-    var pane, ret ;
-    SC.RunLoop.begin() ;
-
-    // get the target pane
-    if (target) pane = target.get('pane') ;
-    else pane = this.get('keyPane') || this.get('mainPane') ;
-
-    // if we found a valid pane, send the event to it
-    ret = (pane) ? pane.sendTouchEvent(action, evt, target) : null ;
-
-    SC.RunLoop.end() ;
-    return ret ;
-  },
-
   // .......................................................
   // EVENT LISTENER SETUP
   // 
@@ -479,35 +453,10 @@ SC.RootResponder = SC.Object.extend({
     This touch support is written to meet the following specifications. They are actually
     simple, but I decided to write out in great detail all of the rules so there would
     be no confusion.
-    - Views receive touchStart and touchEnd events
-    - Each touchStart and touchEnd event has a set of touches that were started or ended.
-    - Each view receiving the touchStart and touchEnd events has its own list of touches
-      started or ended (viewChangedTouches).
-    - When receiving a touchStart and touchEnd event, views can subscribe, subscribe
-      exclusively, or ignore the event.
-    - If views subscribe, they will receive touchDragged events for the touches they
-    - Each view receiving ANY touch event has a list of touches the view subscribes to,
-      barring the ones being started or ended (if in a touchStart/End event), as these will
-      not have been subscribed to yet.
-    - Any view the touches move over will receive touchEntered, Exited, and Moved events.
-      Any view at all.
-    - If a touch starts on a view and then moves, the view will receive, in order,
-      touchStart, touchEntered, touchDragged. 
-    - As a touch moves over a view, touchMoved will be called. Both tuchMoved and touchDragged
-      will be called if the view is subscribed to the touch.
-    - If a touch exits a view, touchExited will be called. 
-    - If a view subscribes to a touch, touchDragged will keep being called as the touch moves,
-      even if it has exited the view.
-    - Views subscribe by returning YES for exclusive subscription, NO for ignore, and
-      SC.MIXED_STATE for nonexclusive subscription.
-    - A touchDragged event can change the subscription by returning NO or YES. To leave things
-      the way they are, the view should not return either YES or NO.
-    - If subscription status is changed during a touchDragged, all other views subscribed to those
-      touches should be notified that the touch was cancelled.
-    - Views may stop propagation of touchDragged to other views by returning SC.STOP_DRAG_PROPAGATION;
-      this will allow the other subscribed views to stay subscribed, but not inform them of the drag.
-      Use case: view that can be swiped right for deletion that is a child of a ScrollView. It can
-      stop the event from going to the scroll view until the child is sure it does not want it.
+    
+    There are three events: touchStart, touchEnd, touchDragged. touchStart and End are called
+    individually for each touch. touchDragged events are sent to whatever view owns the touch
+    event
   */
   
   /**
@@ -536,108 +485,227 @@ SC.RootResponder = SC.Object.extend({
     return this._touchedViews[SC.guidFor(view)];
   },
   
-  /**
-    @private
-    Returns the actual touch events for a view, given a view and a map of touch ids to touch objects.
-  */
-  eventTouchesForView: function(view, touchMap) {
-    var viewTouches = this._touchedViews[SC.guidFor(view)].touches, 
-        ret = [], idx, len = viewTouches.length, id;
-    for (idx = 0; idx < length; idx++) {
-      id = viewTouches[idx].identifier;
-      if (touchMap[id]) ret.push(touchMap[id]);
+  assignTouch: function(touch, view) {
+    // get touch entry
+    var touchEntry = this._touches[touch.identifier];
+    
+    // create view entry if needed
+    if (!this._touchedViews[SC.guidFor(view)]) {
+      this._touchedViews[SC.guidFor(view)] = {
+        view: view,
+        touches: []
+      };
     }
-    return ret;
+    
+    // add touch
+    view.touches.push(touchEntry);
+  },
+  
+  unassignTouch: function(touch) {
+    // find view entry
+    var view, viewEntry, touchEntry = this._touches[touch.identifier];
+    
+    // get view
+    if (!touchEntry.view) return; // touchEntry.view should===touchEntry.touchResponder eventually :)
+    view = touchEntry.view;
+    
+    // get view entry
+    viewEntry = this._touchedViews[SC.guidFor(view)];
+    viewEntry.touches.removeObject(touchEntry);
+    
+    // remove view entry if needed
+    if (viewEntry.touches.length < 1) {
+      delete this._touchedViews[SC.guidFor(view)];
+    }
+    
+    // clear view
+    touchEntry.view = undefined;
   },
   
   /**
-    @private
-    Creates a touch map (map of touch ids in an event to the touches themselves).
-  */
-  makeTouchMap: function(evt) {
-    var idx, len = evt.touches.length, ret = {};
-    for (idx = 0; idx < len; idx++) {
-      ret[evt.touches[idx].identifier] = evt.touches[idx];
+    The touch responder for any given touch is the view which will receive touch events
+    for that touch. Quite simple.
+    
+    makeTouchResponder takes a potential responder as an argument, and, by calling touchStart on each
+    nextResponder, finds the actual responder. As a side-effect of how it does this, touchStart is called
+    on the new responder before touchCancelled is called on the old one (touchStart has to accept the touch
+    before it can be considered cancelled).
+    
+    You usually don't have to think about this at all. However, if you don't want your view to,
+    for instance, prevent scrolling in a ScrollView, you need to make sure to transfer control
+    back to the previous responder:
+    
+    if (Math.abs(touch.pageY - touch.startY) > this.MAX_SWIPE) touch.restoreLastTouchResponder();
+    
+    You don't call makeTouchResponder on RootResponder directly. Instead, it gets called for you
+    when you return YES to captureTouch or touchStart.
+    
+    You do, however, use a form of makeTouchResponder to return to a previous touch responder. Consider
+    a button view inside a ScrollView: if the touch moves too much, the button should give control back
+    to the scroll view.
+    
+    if (Math.abs(touch.pageX - touch.startX) > 4) {
+      if (touch.nextTouchResponder) touch.makeTouchResponder(touch.nextTouchResponder);
     }
-    return ret;
+    
+    This will give control back to the containing view. Maybe you only want to do it if it is a ScrollView?
+    
+    if (Math.abs(touch.pageX - touch.startX) > 4 && touch.nextTouchResponder && touch.nextTouchResponder.isScrollable)
+      touch.makeTouchResponder(touch.nextTouchResponder);
+    
+    Possible gotcha: while you can do touch.nextTouchResponder, the responders are not chained in a linked list like
+    normal responders, because each touch has its own responder stack. To navigate through the stack (or, though
+    it is not recommended, change it), use touch.touchResponders (the raw stack array).
+    
+    makeTouchResponder is called with an event object. However, it usually triggers custom touchStart/touchCancelled
+    events on the views. The event object is passed so that functions such as stopPropagation may be called.
+  */
+  makeTouchResponder: function(touch, responder, shouldStack) {
+    var stack = touch.touchResponders, touchesForView;
+    
+    // find the actual responder (if any, I suppose)
+    responder = this.sendEvent("touchStart", touch, responder);
+    
+    // if the item is in the stack, we will go to it (whether shouldStack is true or not) 
+    // as it is already stacked
+    if (!shouldStack || stack.indexOf(responder)) {
+      
+      // pop all other items
+      var idx = stack.length - 1, last = stack[idx];
+      while (last && last !== responder) {
+        // unassign the touch
+        this.unassignTouch(touch);
+        touchesForView = this.touchesForView(last); // won't even exist if there are no touches
+        
+        // send touchCancelled (or, don't, if the view doesn't accept multitouch and it is not the last touch)
+        if (last.get("acceptsMultitouch") || !touchesForView) {
+          last.tryToPerform("touchCancelled", touch);
+        }
+        
+        // go to next (if < 0, it will be undefined, so lovely)
+        idx--;
+        last = stack[idx];
+        
+        // update responders (for consistency)
+        stack.pop();
+        
+        touch.touchResponder = stack[idx];
+        touch.nextTouchResponder = stack[idx - 1];
+      }
+      
+    }
+    
+    // now that we've popped off, we can push on
+    if (responder) {
+      this.assignTouch(touch, responder);
+      stack.push(responder);
+      
+      // update responder helpers
+      touch.touchResponder = responder;
+      touch.nextTouchResponder = stack[stack.length - 2];
+    }
+  },
+  
+  /**
+    captureTouch is used to find the view to handle a touch. It starts at the starting point and works down
+    to the touch's target, looking for a view which captures the touch. If no view is found, it uses the target
+    view.
+    
+    Then, it triggers a touchStart event starting at whatever the found view was; this propagates up the view chain
+    until a view responds YES. This view becomes the touch's owner.
+    
+    You usually do not call captureTouch, and if you do call it, you'd call it on the touch itself:
+    touch.captureTouch(startingPoint, shouldStack)
+    
+    If shouldStack is YES, the previous responder will be kept so that it may be returned to later.
+  */
+  captureTouch: function(touch, startingPoint, shouldStack) {
+    if (!startingPoint) startingPoint = this;
+    
+    var touchEntry = this._touches[touch.identifier], 
+        target = touchEntry.targetView, view = target,
+        chain = [], idx, len;
+    
+    // work up the chain until we get the root
+    while (view && (view !== startingPoint)) {
+      chain.push(view);
+      view = view.get('nextResponder');
+    }
+    
+    // work down the chain
+    for (len = chain.length, idx = 0; idx < len; idx++) {
+      view = chain[idx];
+      
+      // see if it captured the touch
+      if (view.tryToPerform('captureTouch', touch)) {
+        // if so, make it the touch's responder
+        this.makeTouchResponder(touch, view, shouldStack); // triggers touchStart/Cancel/etc. event.
+        return; // and that's all we need
+      }
+    }
+    
+    // if we did not capture the touch (obviously we didn't)
+    // we need to figure out what view _will_
+    // Thankfully, makeTouchResponder does exactly that: starts at the view it is supplied and keeps calling startTouch
+    this.makeTouchResponder(touch, target, shouldStack);
+  },
+  
+  prepareTouch: function(evt, touch) {
+    // get the raw target view (we'll refine later)
+    var target = this.targetViewForEvent(touch), touchEntry;
+    touchEntry = {
+      targetView: target, // the captureTouch(touch(es), startingPoint) uses this
+      identifier: touch.identifier, // for now, our internal id is WebKit's,
+      touchContext: this,
+      
+      view: undefined, // used internally while waiting for touchResponder to be updated to final value.
+      
+      touchResponder: undefined, // last item in touchResponders, if any
+      nextTouchResponder: undefined, // convenience: second to last item in touchResponders (if any)
+      touchResponders: [] // the touch responder chain.
+    };
+    
+    touchEntry.startX = touchEntry.pageX = touch.pageX;
+    touchEntry.startY = touchEntry.pageY = touch.pageY;
+    
+    SC.mixin(touchEntry, SC.RootResponder._TouchHelpers);
   },
 
   /**
-    Called when the user first touches a view.
-
-    When this happens, we send the event up the view chain to see who is
-    interested in subscribing to future related touch events. A view may
-    respond with YES to get exclusive control, or may respond with
-    SC.MIXED_STATE to get a non-exclusive subscription.
-
+    Triggers touchStart on views.
+    
     @param {Event} evt the event
     @returns {Boolean}
   */
   touchstart: function(evt) {
     try {
-      // for every changed touch, we must find the raw target view, and batch in that way.
-      // then, for each changed view, 
-      var idx, touches = evt.changedTouches, len = touches.length, touch, touchIdx, touchLen,
-          viewKey, viewEntry, touchedViewEntry, touchEntry, touchEntries = this._touches, changedViews = {}, touchedViews;
+      // loop through changed touches, calling touchStart, etc.
+      var idx, touches = evt.changedTouches, len = touches.length, target, view, touch, touchEntry;
+      
+      // prepare event for touch mapping.
+      evt.touchContext = this;
       
       // each touch
       for (idx = 0; idx < len; idx++) {
         touch = touches[idx];
+
         
-        // get the raw target view (we'll refine later)
-        var view = this.targetViewForEvent(touch);
+        // prepare a touch entry (our internal representation)
+        touchEntry = this.prepareTouch(evt, touch);
         
-        // and add if needed
-        if (!changedViews[SC.guidFor(view)]) viewEntry = changedViews[SC.guidFor(view)] = { view: view, touches: [] };
-        viewEntry.touches.push(touch);
+        // map touch
+        this._touches[touch.identifier] = touchEntry;
         
-        // create a touch entry
-        touchEntries[touch.identifier] = {
-          views: [],
-          lastX: touch.pageX,
-          lastY: touch.pageY,
-          identifier: touch.identifier // could be replaced with an internal one later
-        };
-      }
-      
-      
-      // call events, register views with touches, and touches with views
-      for (viewKey in changedViews) {
-        viewEntry = changedViews[viewKey];
-        view = viewEntry.view;
+        // set the event (so default action, etc. can be stopped)
+        touch.event = evt; // will be unset momentarily
         
-        // set changed touches
-        evt.viewChangedTouches = viewEntry.touches;
+        // send out event thing: creates a chain, goes up it, then down it, with startTouch and cancelTouch.
+        // in this case, only startTouch, as there are no existing touch responders.
+        // We send the touchEntry because it is cached (we add the helpers only once)
+        this.captureTouch(evt, touchEntry, this);
         
-        // call sendTouchEvent with _this_ as the source for viewTouches (touchesForViews)
-        touchedViews = this.sendTouchEvent('touchStart', evt, view, this);
-        
-        // get an entry
-        if (!this._touchedViews[viewKey]) this._touchedViews[viewKey] = {touches: []};
-        touchedViewEntry = this._touchedViews[viewKey];
-        
-        // loop through touched views
-        len = touchedViews.length;
-        for (idx = 0; idx < len; idx++) {
-          // get the _real_ view
-          view = touchedViews[idx];
-          
-          // set hasTouch so the pane knows not to send touches again to ones that don't acceptMultitouch
-          view.set("hasTouch", YES);
-          
-          // add view to touchEntry
-          touchLen = touches.length;
-          for (touchIdx = 0; touchIdx < touchLen; touchIdx++) {
-            touchEntry = touches[touchIdx];
-            
-            // add view entry to touch entry
-            touchEntry.views.push(touchedViewEntry);
-            
-            // and touch entry to view touch entry
-            touchedViewEntry.touches.push(touchEntry);
-          }
-        }
-        
+        // and, unset
+        touch.event = null;
         
       }
     } catch (e) {
@@ -653,213 +721,68 @@ SC.RootResponder = SC.Object.extend({
     @private
     used to keep track of when a specific type of touch event was last handled, to see if it needs to be re-handled
   */
-  _touch_move_generation: 0,
   touchmove: function(evt) {
     SC.RunLoop.begin();
     try {
-      // HOLY VARIABLES BATMAN! I think some of these could be consolidated.
-      var touches = evt.changedTouches, idx, len, touch, 
-          touchEntry, touchEntries = this._touches, targetView, view,
-          touchViews, touchViewIdx, touchViewLen, touchView,
-          lh, nh, hoverIdx, hoverLen,
-          viewChanges = {}, viewChangeEntry, viewKey,
-          touchesForSubscriber = {}, touchMap = this.makeTouchMap(evt);
+      // pretty much all we gotta do is update touches, and figure out which views need updating.
+      var touches = evt.changedTouches, touch, touchEntry,
+          idx, len = touches.length, view, changedTouches,
+          changedViews = {};
       
-      
-      /* ...........................................................................
-        First Step:
-        - Loops through the changed touches
-        - Determines if the touch has entered, exited, or moved in any views; if so,
-          queues the event for later dispatch (in viewChanges).
-        - Fills a Subscriber -> [Touches] map for later use (touchesForSubscriber)
-        ..............................................................................*/
-      for (len = touches.length, idx = 0; idx < len; idx++) {
+      // figure out what views had touches changed, and update our internal touch objects
+      for (idx = 0; idx < len; idx++) {
         touch = touches[idx];
         
-        // get touch entry
+        // get our touch
         touchEntry = this._touches[touch.identifier];
         
-        // sanity check
+        // sanity-check
         if (!touchEntry) {
-          console.log("Received a touchmove for a touch we never got touchstart for. This is a problem.");
+          console.log("Received a touchmove for a touch we don't know about. This is bad.");
           continue;
         }
         
-        // get target view
-        targetView = this.targetViewForEvent(touch);
+        // update touch
+        touchEntry.pageX = touch.pageX;
+        touchEntry.pageY = touch.pageY;
+        touchEntry.event = evt;
         
-        // get last hovered. At start, it is the touch start view set (the touch entry's views)
-        lh = touchEntry.lastHovered || [];
-        nh = [];
-        
-        // walk up the view chain and determine if our target has changed
-        // triggering touchEntered/Exited
-        while (targetView && (targetView !== this)) {
-          if (lh.indexOf(targetView) !== -1) {
-            // this means that it was entered before
-            // so just send touchMoved
-            
-            // get queue entry
-            viewKey = SC.guidFor(targetView);
-            if (!viewChanges[viewKey]) viewChanges[viewKey] = { view: targetView, moved: [] };
-            if (!viewChanges[viewKey].moved) viewChanges[viewKey].moved = [];
-            viewChanges[viewKey].moved.push(touch);
-            
-            // and we are hovering over it
-            nh.push(targetView);
-          } else {
-            // this means that we have NOT entered before
-            // so send touchEntered
-            
-            // well, queue it, at least
-            viewKey = SC.guidFor(targetView);
-            if (!viewChanges[viewKey]) viewChanges[viewKey] = { view: targetView, entered: [] };
-            if (!viewChanges[viewKey].entered) viewChanges[viewKey].entered = [];
-            viewChanges[viewKey].entered.push(touch);
-            
-            nh.push(targetView);
-          }
+        // if the touch entry has a view
+        if (touchEntry.touchResponder) {
+          view = touchEntry.touchResponder;
           
-          // next...
-          targetView = targetView.get("nextResponder");
-        }
-        
-        for (hoverIdx = 0, hoverLen = lh.length; hoverIdx < hoverLen; hoverIdx++) {
-          targetView = lh[hoverIdx];
+          // create a view entry
+          if (!changedViews[SC.guidFor(view)]) changedViews[SC.guidFor(view)] = { view: view, touches: [] };
           
-          // call touchExited if needed and possible
-          if (targetView.respondsTo('touchExited') && nh.indexOf(targetView) === -1) {
-            // queuing action
-            viewKey = SC.guidFor(targetView);
-            if (!viewChanges[viewKey]) viewChanges[viewKey] = { view: targetView, exited: [] };
-            if (!viewChanges[viewKey].exited) viewChanges[viewKey].exited = [];
-            viewChanges[viewKey].exited.push(touch);
-          }
-        }
-        
-        // reset last hovered
-        touchEntry.lastHovered = nh;
-        
-        // now map subscribers to touches
-        touchViews = touchEntry.views;      
-        for (touchViewLen = touchViews.length, touchViewIdx = 0; touchViewIdx < touchViewLen; touchViewIdx++) {
-          // more fancy queuing
-          touchView = touchViews[touchViewIdx].view;
-          viewKey = SC.guidFor(touchView);
-          if (!touchesForSubscriber[viewKey]) touchesForSubscriber[viewKey] = [];
-          touchesForSubscriber[viewKey].push(touch);
+          // add touch
+          changedViews[SC.guidFor].touches.push(touchEntry);
         }
       }
       
-      
-      /* ..................................................................................
-         Send queued events.
-         .................................................................................. */
-      // loop through queued events
-      for (idx in viewChanges) {
-        view = viewChanges[idx].view;
+      // loop through changed views and send events
+      for (idx in changedViews) {
+        // get info
+        view = changedViews[idx].view;
+        changedTouches = changedViews[idx].touches;
         
-        // get the view touches, if the view has view touches (we prepared a touch map to do this earlier).
-        // Note that these are not only the touches changed (which we could just look up in touchesForSubscriber),
-        // but also the touches NOT changed. In short, the entire set of touches for the view.
-        // eventTouchesForView takes our touch map (map of touch ids to touch events) and returns the touch
-        // events belonging to the view.
-        evt.viewTouches = this.eventTouchesForView(view, touchMap);
+        // prepare event; note that views often won't use this method anyway (they'll call touchesForView instead)
+        evt.viewChangedTouches = changedTouches;
         
-        // exited
-        if (viewChanges[idx].exited) {
-          evt.viewChangedTouches = viewChanges[idx].exited;
-          view.tryToPerform("touchExited", evt);
-        }
+        // the first VIEW touch should be the touch info sent
+        evt.pageX = changedTouches[0].pageX;
+        evt.pageY = changedTouches[0].pageY;
+        evt.touchContext = this; // so it can call touchesForView
         
-        // entered
-        if (viewChanges[idx].entered) {
-          evt.viewChangedTouches = viewChanges[idx].entered;
-          view.tryToPerform("touchEntered", evt);
-        }
-        
-        // moved
-        if (viewChanges[idx].moved) {
-          evt.viewChangedTouches = viewChanges[idx].moved;
-          view.tryToPerform("touchMoved", evt);
-        }
+        // and go
+        view.tryToPerform("touchDragged", evt);
       }
       
-      
-      /* .......................................................................................
-         touchDragged dispatch.
-         
-         touchDragged is slightly tricky. Thankfully, because of our touchesForSubscriber, we know
-         every changed touch for any given subscriber. So, the order in which we call the individual
-         subscribers is unimportant, so long as we don't call them twice. Rather than set a flag stating
-         we've called/not called, we'll use a generation number--this should be much faster.
-         
-         We'll cache the result of the call for later.
-         
-         There is one case where this may not work perfectly: View A contains View B. A and B both receive
-         a touch movement. If A's event will be called first, View A will still receive both touches
-         even if B stops propagation on its own touch. I don't know of a way to accomplish this without
-         either a big hit in performance or _really_ complicated code. So, it will be an edge case.
-         ....................................................................................... */
-      var generation = ++this._touch_move_generation;
-      for (len = touches.length, idx = 0; idx < touches.length; idx++) {
-        touch = touches[idx];
-        
-        // get touch entry
-        touchEntry = this._touches[touch.identifier];
-        
-        // views that stopped subscribing
-        var stopped = [];
-        
-        // get touch views
-        touchViews = touchEntry.views;
-        for (touchViewLen = touchViews.length, touchViewIdx = 0; touchViewIdx < touchViewLen; touchViewIdx++) {
-          touchView = touchViews[touchViewIdx].view;
-          viewKey = SC.guidFor(touchView);
-          
-          touchView = touchViews[touchViewIdx];
-          evt.viewChangedTouches = touchesForSubscriber[viewKey];
-          evt.viewTouches = this.eventTouchesForView(view, touchMap);
-          
-          if (touchView.view.respondsTo('touchDragged')) {
-            var result; // the result
-            
-            // if it has not been handled, handle it
-            if (touchView.handled !== generation) {
-              result = touchView.touchDragged(evt);
-              touchView.handledResult = result;
-              touchView.handled = generation;
-            } else {
-              // otherwise, get its previous value
-              result = touchView.handledResult;
-            }
-            
-            if (result === YES) {
-              // note: will cancel only those that have not been cancelled this generation
-              this.cancelTouch(touchViews, touchView, generation);
-              touchViews = null;
-              touchEntry.views = [touchView];
-              break;
-            } else if (result === NO) {
-              // queue removal of this specific view
-              stopped.push(touchView);
-            } else if (result === SC.STOP_DRAG_PROPAGATION) {
-              break; // stop propagating if the result was SC.STOP_DRAG_PROPAGATION, well...
-              // don't propagate. But don't remove from list either.
-            }
-          }
-          
-        }
-        
-        // make them stop listening
-        for (touchViewLen = stopped.length, touchViewIdx = 0; touchViewIdx < touchViewLen; touchViewIdx++) {
-          touchViews.removeObject(stopped[touchViewIdx]);
-        }
+      // clear references to event
+      len = touches.length;
+      for (idx = 0; idx < len; idx++) {
+        // and remove event reference
+        touchEntry.event = null;
       }
-  
-      
-      
-      
     } catch (e) {
       SC.Logger.warn('Exception during touchMove: %@'.fmt(e)) ;
     }
@@ -869,66 +792,94 @@ SC.RootResponder = SC.Object.extend({
 
   touchend: function(evt) {
     try {
-      evt.cancel = NO ;
-      var handler = null, views = this._touchViews, idx, len, view ;
-
-      // attempt the call only if there's a target.
-      // don't want a touch end going to anyone unless they handled the 
-      // touch start...
-      if (views) {
-        len = views.get('length');
-        for (idx=0; idx<len; idx++) {
-          view = views[idx];
-          if (view.respondsTo('touchEnd')) {
-            view['touchEnd'](evt);
+      var touches = evt.changedTouches, touch, touchEntry,
+          idx, len = touches.length, 
+          view, 
+          action = evt.isCancel ? "touchCancelled" : "touchEnd",
+          responderIdx, responders, responder;
+      
+      for (idx = 0; idx < len; idx++) {
+        //get touch+entry
+        touch = touches[idx];
+        touchEntry = this._touches[touch.identifier];
+        
+        // unassign
+        this.unassignTouch(touch);
+        
+        // call end for all items in chain
+        if (touch.touchResponder) {
+          responders = touch.touchResponders;
+          responderIdx = responders.length - 1;
+          responder = responders[responderIdx];
+          
+          while (responder) {
+            // tell it
+            responder.tryToPerform(action, touchEntry);
+            
+            // next
+            responderIdx--;
+            responder = responders[responderIdx];
           }
         }
+        
+        // clear responders (just to be thorough)
+        touch.touchResponders = null;
+        touch.touchResponder = null;
+        touch.nextTouchResponder = null;
+        
+        // and remove from our set
+        delete this._touches[touch.identifier];
       }
-      // cleanup
-      this._touchViews = null ;
     } catch (e) {
       SC.Logger.warn('Exception during touchEnd: %@'.fmt(e)) ;
       this._touchViews = null ;
       return NO ;
     }
-    return (handler) ? evt.hasCustomEventHandling : YES ;
+    return YES;
   },
 
   /** @private
-    Handle touch cancel event.  Works just like touch end except evt.cancel
-    is set to YES.
+    Handle touch cancel event.  Works just like cancelling a touch for any other reason.
+    touchend handles it as a special case (sending cancel instead of end if needed).
   */
   touchcancel: function(evt) {
-    evt.cancel = YES ;
-    return this.touchend(evt);
-  },
-
-  /**
-    If multiple views were subscribed to touch events, sends a touchCancelled
-    event to all but the new, exclusive view. This is usually called when
-    a view asks for exclusive control by returning YES from a touchDragged
-    event.
-
-    @param {Array} views the array of views subscribed to touch events
-    @param {SC.View} newView the new view that is asking for exclusive control
-    @param {Event} evt the touch event
-    @private
-  */
-  cancelTouch: function(views, newView, evt, generation) {
-    var viewEntry, view, idx, len;
-
-    len = views.get('length');
-    for (idx = 0; idx < len; idx++) {
-      viewEntry = views[idx];
-      if (viewEntry.cancelledOn === generation) continue;
-      view = viewEntry.view;
-
-      if (view !== newView) {
-        view.tryToPerform('touchCancelled', evt);
-      }
-    }
+    evt.isCancel = YES;
+    this.touchend(evt);
   }
 });
+
+/**
+  @class SC.Touch
+  Represents a touch.
+  
+  Views receive touchStart and touchEnd
+*/
+SC.RootResponder._TouchHelpers = {
+  /**@scope SC.Touch.prototype*/
+  preventDefault: function() {
+    if (this.event) this.event.preventDefault();
+  },
+  
+  stopPropagation: function() {
+    if (this.event) this.event.stopPropagation();
+  },
+  
+  stop: function() {
+    if (this.event) this.event.stop();
+  },
+  
+  makeTouchResponder: function(responder, shouldStack) {
+    this.touchContext.makeTouchResponder(this, responder, shouldStack);
+  },
+  
+  captureTouch: function(startingPoint, stacked) {
+    this.touchContext.captureTouch(this, startingPoint, stacked);
+  },
+  
+  touchesForView: function(view) {
+    return this.touchContext.touchesForView(view);
+  }
+};
 
 /* 
   Invoked when the document is ready, but before main is called.  Creates 
