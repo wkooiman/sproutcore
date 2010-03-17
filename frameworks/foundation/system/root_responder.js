@@ -439,6 +439,7 @@ SC.RootResponder = SC.Object.extend({
       elem.style.bottom = '0px';
       elem.style.right = '0px';
       elem.style.zIndex = 999;
+      elem.style.webkitUserSelect = "none";
 
       document.body.appendChild(elem);
       this._touchInterceptElement = elem;
@@ -482,44 +483,47 @@ SC.RootResponder = SC.Object.extend({
     They are then mapped to touch events and vice-versa. This returns touches mapped to the view.
   */
   touchesForView: function(view) {
-    return this._touchedViews[SC.guidFor(view)];
+    if (this._touchedViews[SC.guidFor(view)]) {
+      return this._touchedViews[SC.guidFor(view)].touches;
+    }
   },
   
   assignTouch: function(touch, view) {
-    // get touch entry
-    var touchEntry = this._touches[touch.identifier];
-    
     // create view entry if needed
     if (!this._touchedViews[SC.guidFor(view)]) {
       this._touchedViews[SC.guidFor(view)] = {
         view: view,
-        touches: []
+        touches: SC.CoreSet.create([])
       };
+      view.set("hasTouch", YES);
     }
     
     // add touch
-    view.touches.push(touchEntry);
+    touch.view = view;
+    this._touchedViews[SC.guidFor(view)].touches.add(touch);
   },
   
   unassignTouch: function(touch) {
     // find view entry
-    var view, viewEntry, touchEntry = this._touches[touch.identifier];
+    var view, viewEntry;
     
     // get view
-    if (!touchEntry.view) return; // touchEntry.view should===touchEntry.touchResponder eventually :)
-    view = touchEntry.view;
+    if (!touch.view) return; // touch.view should===touch.touchResponder eventually :)
+    view = touch.view;
     
     // get view entry
     viewEntry = this._touchedViews[SC.guidFor(view)];
-    viewEntry.touches.removeObject(touchEntry);
+    viewEntry.touches.remove(touch);
     
     // remove view entry if needed
     if (viewEntry.touches.length < 1) {
+      view.set("hasTouch", NO);
+      viewEntry.view = null;
       delete this._touchedViews[SC.guidFor(view)];
     }
     
     // clear view
-    touchEntry.view = undefined;
+    touch.view = undefined;
   },
   
   /**
@@ -562,7 +566,7 @@ SC.RootResponder = SC.Object.extend({
   */
   makeTouchResponder: function(touch, responder, shouldStack) {
     var stack = touch.touchResponders, touchesForView;
-    
+
     // find the actual responder (if any, I suppose)
     responder = this.sendEvent("touchStart", touch, responder);
     
@@ -622,8 +626,7 @@ SC.RootResponder = SC.Object.extend({
   captureTouch: function(touch, startingPoint, shouldStack) {
     if (!startingPoint) startingPoint = this;
     
-    var touchEntry = this._touches[touch.identifier], 
-        target = touchEntry.targetView, view = target,
+    var target = touch.targetView, view = target,
         chain = [], idx, len;
     
     // work up the chain until we get the root
@@ -649,27 +652,6 @@ SC.RootResponder = SC.Object.extend({
     // Thankfully, makeTouchResponder does exactly that: starts at the view it is supplied and keeps calling startTouch
     this.makeTouchResponder(touch, target, shouldStack);
   },
-  
-  prepareTouch: function(evt, touch) {
-    // get the raw target view (we'll refine later)
-    var target = this.targetViewForEvent(touch), touchEntry;
-    touchEntry = {
-      targetView: target, // the captureTouch(touch(es), startingPoint) uses this
-      identifier: touch.identifier, // for now, our internal id is WebKit's,
-      touchContext: this,
-      
-      view: undefined, // used internally while waiting for touchResponder to be updated to final value.
-      
-      touchResponder: undefined, // last item in touchResponders, if any
-      nextTouchResponder: undefined, // convenience: second to last item in touchResponders (if any)
-      touchResponders: [] // the touch responder chain.
-    };
-    
-    touchEntry.startX = touchEntry.pageX = touch.pageX;
-    touchEntry.startY = touchEntry.pageY = touch.pageY;
-    
-    SC.mixin(touchEntry, SC.RootResponder._TouchHelpers);
-  },
 
   /**
     Triggers touchStart on views.
@@ -691,7 +673,8 @@ SC.RootResponder = SC.Object.extend({
 
         
         // prepare a touch entry (our internal representation)
-        touchEntry = this.prepareTouch(evt, touch);
+        touchEntry = SC.Touch.create(touch, this);
+        touchEntry.timeStamp = evt.timeStamp;
         
         // map touch
         this._touches[touch.identifier] = touchEntry;
@@ -702,7 +685,7 @@ SC.RootResponder = SC.Object.extend({
         // send out event thing: creates a chain, goes up it, then down it, with startTouch and cancelTouch.
         // in this case, only startTouch, as there are no existing touch responders.
         // We send the touchEntry because it is cached (we add the helpers only once)
-        this.captureTouch(evt, touchEntry, this);
+        this.captureTouch(touchEntry, this);
         
         // and, unset
         touch.event = null;
@@ -711,10 +694,11 @@ SC.RootResponder = SC.Object.extend({
     } catch (e) {
       SC.Logger.warn('Exception during touchStart: %@'.fmt(e)) ;
       this._touchViews = null ;
+      SC.RunLoop.end();
       return NO ;
     }
 
-    return view ? evt.hasCustomEventHandling : YES;
+    return NO;
   },
 
   /**
@@ -726,7 +710,7 @@ SC.RootResponder = SC.Object.extend({
     try {
       // pretty much all we gotta do is update touches, and figure out which views need updating.
       var touches = evt.changedTouches, touch, touchEntry,
-          idx, len = touches.length, view, changedTouches,
+          idx, len = touches.length, view, changedTouches, viewTouches, firstTouch,
           changedViews = {};
       
       // figure out what views had touches changed, and update our internal touch objects
@@ -745,6 +729,7 @@ SC.RootResponder = SC.Object.extend({
         // update touch
         touchEntry.pageX = touch.pageX;
         touchEntry.pageY = touch.pageY;
+        touchEntry.timeStamp = evt.timeStamp;
         touchEntry.event = evt;
         
         // if the touch entry has a view
@@ -752,10 +737,10 @@ SC.RootResponder = SC.Object.extend({
           view = touchEntry.touchResponder;
           
           // create a view entry
-          if (!changedViews[SC.guidFor(view)]) changedViews[SC.guidFor(view)] = { view: view, touches: [] };
+          if (!changedViews[SC.guidFor(view)]) changedViews[SC.guidFor(view)] = { "view": view, "touches": [] };
           
           // add touch
-          changedViews[SC.guidFor].touches.push(touchEntry);
+          changedViews[SC.guidFor(view)].touches.push(touchEntry);
         }
       }
       
@@ -769,15 +754,18 @@ SC.RootResponder = SC.Object.extend({
         evt.viewChangedTouches = changedTouches;
         
         // the first VIEW touch should be the touch info sent
-        evt.pageX = changedTouches[0].pageX;
-        evt.pageY = changedTouches[0].pageY;
+        viewTouches = this.touchesForView(view);
+        firstTouch = viewTouches.firstObject();
+        evt.pageX = firstTouch.pageX;
+        evt.pageY = firstTouch.pageY;
         evt.touchContext = this; // so it can call touchesForView
         
         // and go
-        view.tryToPerform("touchDragged", evt);
+        view.tryToPerform("touchesDragged", viewTouches, evt);
       }
       
       // clear references to event
+      touches = evt.changedTouches;
       len = touches.length;
       for (idx = 0; idx < len; idx++) {
         // and remove event reference
@@ -791,6 +779,7 @@ SC.RootResponder = SC.Object.extend({
   },
 
   touchend: function(evt) {
+    SC.RunLoop.begin();
     try {
       var touches = evt.changedTouches, touch, touchEntry,
           idx, len = touches.length, 
@@ -802,19 +791,20 @@ SC.RootResponder = SC.Object.extend({
         //get touch+entry
         touch = touches[idx];
         touchEntry = this._touches[touch.identifier];
+        touchEntry.timeStamp = evt.timeStamp;
         
         // unassign
-        this.unassignTouch(touch);
+        this.unassignTouch(touchEntry);
         
         // call end for all items in chain
-        if (touch.touchResponder) {
-          responders = touch.touchResponders;
+        if (touchEntry.touchResponder) {
+          responders = touchEntry.touchResponders;
           responderIdx = responders.length - 1;
           responder = responders[responderIdx];
           
           while (responder) {
             // tell it
-            responder.tryToPerform(action, touchEntry);
+            responder.tryToPerform(action, touchEntry, evt);
             
             // next
             responderIdx--;
@@ -823,19 +813,22 @@ SC.RootResponder = SC.Object.extend({
         }
         
         // clear responders (just to be thorough)
-        touch.touchResponders = null;
-        touch.touchResponder = null;
-        touch.nextTouchResponder = null;
+        touchEntry.touchResponders = null;
+        touchEntry.touchResponder = null;
+        touchEntry.nextTouchResponder = null;
         
         // and remove from our set
-        delete this._touches[touch.identifier];
+        delete this._touches[touchEntry.identifier];
       }
     } catch (e) {
       SC.Logger.warn('Exception during touchEnd: %@'.fmt(e)) ;
       this._touchViews = null ;
+      SC.RunLoop.end();
       return NO ;
     }
-    return YES;
+    
+    SC.RunLoop.end();
+    return NO;
   },
 
   /** @private
@@ -852,10 +845,28 @@ SC.RootResponder = SC.Object.extend({
   @class SC.Touch
   Represents a touch.
   
-  Views receive touchStart and touchEnd
+  Views receive touchStart and touchEnd.
 */
-SC.RootResponder._TouchHelpers = {
+SC.Touch = function(touch, touchContext) {
+  // get the raw target view (we'll refine later)
+  this.touchContext = touchContext;
+  this.identifier = touch.identifier; // for now, our internal id is WebKit's id.
+  this.targetView = touch.targetNode ? SC.$(touch.targetNode).view()[0] : null;
+  
+  this.view = undefined;
+  this.touchResponder = this.nextTouchResponder = undefined;
+  this.touchResponders = [];
+  
+  this.startX = this.pageX = touch.pageX;
+  this.startY = this.pageY = touch.pageY;
+};
+
+SC.Touch.prototype = {
   /**@scope SC.Touch.prototype*/
+  
+  /**
+    If the touch is associated with an event, prevents default action on the event.
+  */
   preventDefault: function() {
     if (this.event) this.event.preventDefault();
   },
@@ -867,19 +878,39 @@ SC.RootResponder._TouchHelpers = {
   stop: function() {
     if (this.event) this.event.stop();
   },
-  
+
+  /**
+    Changes the touch responder for the touch. If shouldStack === YES,
+    the current responder will be saved so that the next responder may
+    return to it.
+  */
   makeTouchResponder: function(responder, shouldStack) {
     this.touchContext.makeTouchResponder(this, responder, shouldStack);
   },
   
-  captureTouch: function(startingPoint, stacked) {
-    this.touchContext.captureTouch(this, startingPoint, stacked);
+  /**
+    Captures, or recaptures, the touch. This works from the touch's raw target view
+    up to the startingPoint, and finds either a view that returns YES to captureTouch() or
+    touchStart().
+  */
+  captureTouch: function(startingPoint, shouldStack) {
+    this.touchContext.captureTouch(this, startingPoint, shouldStack);
   },
   
+  /**
+    Returns all touches for a specified view. Put as a convenience on the touch itself; this method
+    is also available on the event.
+  */
   touchesForView: function(view) {
     return this.touchContext.touchesForView(view);
   }
 };
+
+SC.mixin(SC.Touch, {
+  create: function(touch, touchContext) {
+    return new SC.Touch(touch, touchContext);
+  }
+});
 
 /* 
   Invoked when the document is ready, but before main is called.  Creates 

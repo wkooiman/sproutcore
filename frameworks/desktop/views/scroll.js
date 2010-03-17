@@ -622,22 +622,20 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     }
   },
 
-  touchStart: function(evt) {
+  captureTouch: function(touch) {
+    return YES;
+  },
+  
+  touchStart: function(touch) {
     // Initialize start state
-    this.beginTouchTracking(evt);
-    this.invokeLater(this.beginTouchesInContent, 150);
-
-    // Indicate that we want a non-exclusive subscription to future
-    // touch events
-    return SC.MIXED_STATE;
+    this.beginTouchTracking(touch);
+    this.invokeLater(this.beginTouchesInContent, 150);    
   },
 
   beginTouchesInContent: function() {
     var touch = this.touch, itemView;
     if (touch.tracking && !touch.dragging) {
-      var ev = touch.originalEvent;
-      ev.manufactured = YES;
-      this.contentView.mouseDown(ev);
+      touch.touch.captureTouch(this, YES);
     }
   },
 
@@ -649,18 +647,16 @@ SC.ScrollView = SC.View.extend(SC.Border, {
 
     @param {Event} evt
   */
-  beginTouchTracking: function(evt) {
+  beginTouchTracking: function(touch) {
     var verticalScrollOffset = this.get('verticalScrollOffset');
 
     this.touch = {
       startScrollOffset: { x: this.horizontalScrollOffset, y: verticalScrollOffset },
-      startTime: evt.timeStamp,
+      startTime: touch.timeStamp,
       startTimePosition: verticalScrollOffset,
-      startTouchOffset: { x: evt.pageX, y: evt.pageY },
+      startTouchOffset: { x: touch.pageX, y: touch.pageY },
       decelerationVelocity: { y: 0 },
-      originalTarget: SC.RootResponder.responder.targetViewForEvent(evt),
-      originalPane: this.get('pane'),
-      originalEvent: SC.copy(evt),
+      touch: touch,
 
       tracking: YES,
       dragging: NO,
@@ -671,7 +667,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     this.dragging = NO;
   },
 
-  touchDragged: function(evt) {
+  touchesDragged: function(touches, evt) {
     var touch = this.touch,
         touchY = evt.pageY,
         offsetY = touch.startScrollOffset.y,
@@ -698,7 +694,6 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       }
     }
     this.set('verticalScrollOffset', Math.max(0,Math.min(offsetY, maxOffset)));
-
     if (evt.timeStamp - touch.lastEventTime > 50) {
       touch.startTime = evt.timeStamp;
       touch.startTimePosition = this.get('verticalScrollOffset');
@@ -706,18 +701,18 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     touch.lastEventTime = evt.timeStamp;
   },
 
-  touchEnd: function(evt) {
-    var touch = this.touch;
+  touchEnd: function(touch) {
+    var touchStatus = this.touch;
 
     this.tracking = NO;
-    touch.tracking = NO;
+    touchStatus.tracking = NO;
     this.dragging = NO;
-    if (touch.dragging) {
-      touch.dragging = NO;
+    if (touchStatus.dragging) {
+      touchStatus.dragging = NO;
 
-      if (evt.timeStamp - touch.lastEventTime <= 100) {
-        touch.offsetBeforeDeceleration = { y: this.get('verticalScrollOffset') };
-        this.startDecelerationAnimation(evt);
+      if (touch.timeStamp - touchStatus.lastEventTime <= 100) {
+        touchStatus.offsetBeforeDeceleration = { y: this.get('verticalScrollOffset') };
+        this.startDecelerationAnimation(touch);
       }
     }
   },
@@ -727,6 +722,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
 
     var scrollDistance = this.get('verticalScrollOffset') - touch.startTimePosition;
     var scrollDuration = (evt.timeStamp - touch.startTime)/15;
+    console.error(scrollDistance + " " + scrollDuration);
     touch.decelerationVelocity = { y: scrollDistance / scrollDuration };
     this.decelerateAnimation();
   },

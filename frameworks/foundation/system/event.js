@@ -125,14 +125,16 @@ SC.Event = function(originalEvent) {
       len = this.touches.length;
       for (idx = 0; idx < len; idx++) {
         touch = this.touches[idx];
-        touch.target = document.elementFromPoint(touch.pageX, touch.pageY);
+        
+        // use targetNode because apparently "target" is not modifiable
+        touch.targetNode = document.elementFromPoint(touch.pageX, touch.pageY);
       }
       
       // and the changed touches
       len = this.changedTouches.length;
       for (idx = 0; idx < len; idx++) {
         touch = this.changedTouches[idx];
-        touch.target = document.elementFromPoint(touch.pageX, touch.pageY);
+        touch.targetNode = document.elementFromPoint(touch.pageX, touch.pageY);
       }
       
       // document.body.appendChild(elem);
