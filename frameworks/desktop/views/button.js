@@ -400,7 +400,7 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
   },
   
   // drag
-  touchDragged: function(evt) {
+  touchesDragged: function(evt, touches) {
     if (!this.touchIsInBoundary(evt)) {
       if (!this._touch_exited) this.set('isActive', NO);
       this._touch_exited = YES;

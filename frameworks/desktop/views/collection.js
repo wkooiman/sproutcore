@@ -2255,8 +2255,7 @@ SC.CollectionView = SC.View.extend(
   // ..........................................................
   // TOUCH EVENTS
   //
-  touchStart: function(ev) {
-
+  touchStart: function(touch, evt) {
     // When the user presses the mouse down, we don't do much just yet.
     // Instead, we just need to save a bunch of state about the mouse down
     // so we can choose the right thing to do later.
@@ -2267,7 +2266,7 @@ SC.CollectionView = SC.View.extend(
     // find the actual view the mouse was pressed down on.  This will call
     // hitTest() on item views so they can implement non-square detection
     // modes. -- once we have an item view, get its content object as well.
-    var itemView      = this.itemViewForEvent(ev),
+    var itemView      = this.itemViewForEvent(touch),
         content       = this.get('content'),
         contentIndex  = itemView ? itemView.get('contentIndex') : -1,
         info, anchor ;
@@ -2275,13 +2274,14 @@ SC.CollectionView = SC.View.extend(
     // become first responder if possible.
     this.becomeFirstResponder() ;
     this.select(contentIndex, NO);
-
-    return SC.MIXED_STATE;
+    return YES;
   },
 
-  touchesDragged: function(evt) {
+  touchesDragged: function(evt, touches) {
+    touches.forEach(function(t){
+      if (Math.abs(t.pageY - t.startY) > 4) t.makeTouchResponder(t.nextTouchResponder);
+    });
     this.select(null, NO);
-    return SC.MIXED_STATE;
   },
 
   touchCancelled: function(evt) {
