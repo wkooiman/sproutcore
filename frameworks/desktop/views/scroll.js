@@ -634,7 +634,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
 
   beginTouchesInContent: function() {
     var touch = this.touch, itemView;
-    if (touch.tracking && !touch.dragging) {
+    if (touch && touch.tracking && !touch.dragging) {
       touch.touch.captureTouch(this, YES);
     }
   },
@@ -739,6 +739,10 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       
       touchStatus.offsetBeforeDeceleration = { y: this.get('verticalScrollOffset') };
       this.startDecelerationAnimation(touch);
+    } else {
+      // trigger touchStart/End on actual target view if possible
+      touch.captureTouch(this);
+      if (touch.touchResponder && touch.touchResponder !== this) touch.touchResponder.tryToPerform("touchEnd", touch);
     }
   },
   
