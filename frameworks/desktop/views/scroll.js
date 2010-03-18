@@ -649,7 +649,18 @@ SC.ScrollView = SC.View.extend(SC.Border, {
   */
   beginTouchTracking: function(touch) {
     var verticalScrollOffset = this.get('verticalScrollOffset');
-
+    
+    if (this.touch && this.touch.timeout) {
+      // first, finish up the hack to boost deceleration
+      SC.RunLoop.begin();
+      this.set("verticalScrollOffset", this._scroll_verticalScrollOffset);
+      SC.RunLoop.end();
+      
+      // now clear the timeout
+      clearTimeout(this.touch.timeout);
+      this.touch.timeout = null;
+    }
+    
     this.touch = {
       startScrollOffset: { x: this.horizontalScrollOffset, y: verticalScrollOffset },
       startTime: touch.timeStamp,
@@ -657,6 +668,9 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       startTouchOffset: { x: touch.pageX, y: touch.pageY },
       decelerationVelocity: { y: 0 },
       touch: touch,
+      lastEventTime: touch.timeStamp,
+      scrollVelocityX: 0,
+      scrollVelocityY: 0,
 
       tracking: YES,
       dragging: NO,
@@ -693,12 +707,24 @@ SC.ScrollView = SC.View.extend(SC.Border, {
         return;
       }
     }
+    
+    // update immediately first
+    this._scroll_verticalScrollOffset = Math.max(0,Math.min(Math.round(offsetY), maxOffset));
+    var transform = 'translate3d('+ -0 +'px, '+ -this._scroll_verticalScrollOffset+'px, 0)';
+    this.get("contentView").get('layer').style.webkitTransform = transform;
+    
+    // now update the "proper" way
     this.set('verticalScrollOffset', Math.max(0,Math.min(offsetY, maxOffset)));
-    if (evt.timeStamp - touch.lastEventTime > 50) {
-      touch.startTime = evt.timeStamp;
-      touch.startTimePosition = this.get('verticalScrollOffset');
+    if (evt.timeStamp - touch.lastEventTime >= 50) {
+      var horizontalOffset = this.get('horizontalScrollOffset');
+      var verticalOffset = this.get('verticalScrollOffset');
+      
+      touch.scrollVelocityX = ((horizontalOffset - touch.lastHorizontalOffset) / (evt.timeStamp - touch.lastEventTime)); // in px per ms
+      touch.scrollVelocityY = ((verticalOffset - touch.lastVerticalOffset) / (evt.timeStamp - touch.lastEventTime)); // in px per ms
+      touch.lastHorizontalOffset = horizontalOffset;
+      touch.lastVerticalOffset = verticalOffset;
+      touch.lastEventTime = evt.timeStamp;
     }
-    touch.lastEventTime = evt.timeStamp;
   },
 
   touchEnd: function(touch) {
@@ -709,40 +735,67 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     this.dragging = NO;
     if (touchStatus.dragging) {
       touchStatus.dragging = NO;
-
-      if (touch.timeStamp - touchStatus.lastEventTime <= 100) {
-        touchStatus.offsetBeforeDeceleration = { y: this.get('verticalScrollOffset') };
-        this.startDecelerationAnimation(touch);
-      }
+      touchStatus.lastEventTime = touch.timeStamp;
+      
+      touchStatus.offsetBeforeDeceleration = { y: this.get('verticalScrollOffset') };
+      this.startDecelerationAnimation(touch);
     }
   },
 
   startDecelerationAnimation: function(evt) {
     var touch = this.touch;
-
-    var scrollDistance = this.get('verticalScrollOffset') - touch.startTimePosition;
-    var scrollDuration = (evt.timeStamp - touch.startTime)/15;
-    console.error(scrollDistance + " " + scrollDuration);
-    touch.decelerationVelocity = { y: scrollDistance / scrollDuration };
+    
+    touch.lastFrameUpdateTime = touch.decelerationStarted = Date.now();
+    touch.decelerationVelocity = { y: touch.scrollVelocityY * 10 };
+    
     this.decelerateAnimation();
   },
 
   decelerateAnimation: function() {
     var touch = this.touch,
         maxOffset = this.get('maximumVerticalScrollOffset'),
-        newY = this.get('verticalScrollOffset') + touch.decelerationVelocity.y;
-    this.set('verticalScrollOffset', Math.max(0,Math.min(Math.round(newY), maxOffset)));
+        newY = this._scroll_verticalScrollOffset + touch.decelerationVelocity.y,
+        now = Date.now(),
+        t = now - touch.lastEventTime;
+    
+    this._scroll_verticalScrollOffset = Math.max(0,Math.min(Math.round(newY), maxOffset));
+    var transform = 'translate3d('+ -0 +'px, '+ -this._scroll_verticalScrollOffset+'px, 0)';
+    this.get("contentView").get('layer').style.webkitTransform = transform;
+    
+    if (now - touch.decelerationStarted > 100) {
+      touch.decelerationVelocity.y = touch.decelerationVelocity.y * Math.pow(0.950, (t / 10));
+    }
 
-    touch.decelerationVelocity.y *= 0.950;
-
+    var self = this;
     var absYVelocity = Math.abs(touch.decelerationVelocity.y);
     if (absYVelocity < 1) {
       touch.decelerationVelocity.y = 0;
       touch.decelerating = NO;
+      touch.timeout = null;
+      
+      SC.RunLoop.begin();
+      this.set("verticalScrollOffset", this._scroll_verticalScrollOffset);
+      SC.RunLoop.end();
+      return;
+    } else if (now - touch.lastFrameUpdateTime > 750) {
+      
+      this.touch.timeout = setTimeout(function(){
+        self.decelerateAnimation();
+      }, 10);
+      
+      SC.RunLoop.begin();
+      this.set("verticalScrollOffset", this._scroll_verticalScrollOffset);
+      SC.RunLoop.end();
+      touch.lastFrameUpdateTime = now;
+      
       return;
     }
-
-    this.invokeLater(this.decelerateAnimation, 16);
+    
+    touch.lastEventTime = Date.now();
+    
+    this.touch.timeout = setTimeout(function(){
+      self.decelerateAnimation();
+    }, 10);
   },
 
   // ..........................................................
@@ -963,7 +1016,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
 
       // Use accelerated drawing if the browser supports it
       if (SC.browser.touch) {
-        var transform = 'translate3d(-'+horizontalScrollOffset+'px, -'+verticalScrollOffset+'px, 0)';
+        var transform = 'translate3d('+ -horizontalScrollOffset+'px, '+ -verticalScrollOffset+'px, 0)';
         content.get('layer').style.webkitTransform = transform;
       }
     }
