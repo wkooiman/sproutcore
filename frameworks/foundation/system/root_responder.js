@@ -572,7 +572,7 @@ SC.RootResponder = SC.Object.extend({
     
     // if the item is in the stack, we will go to it (whether shouldStack is true or not) 
     // as it is already stacked
-    if (!shouldStack || stack.indexOf(responder)) {
+    if (!shouldStack || (stack.indexOf(responder) > -1 && stack[stack.length - 1] !== responder)) {
       
       // pop all other items
       var idx = stack.length - 1, last = stack[idx];
@@ -761,7 +761,7 @@ SC.RootResponder = SC.Object.extend({
         evt.touchContext = this; // so it can call touchesForView
         
         // and go
-        view.tryToPerform("touchesDragged", viewTouches, evt);
+        view.tryToPerform("touchesDragged", evt, viewTouches);
       }
       
       // clear references to event
@@ -852,6 +852,7 @@ SC.Touch = function(touch, touchContext) {
   this.touchContext = touchContext;
   this.identifier = touch.identifier; // for now, our internal id is WebKit's id.
   this.targetView = touch.targetNode ? SC.$(touch.targetNode).view()[0] : null;
+  this.target = touch.targetNode;
   
   this.view = undefined;
   this.touchResponder = this.nextTouchResponder = undefined;

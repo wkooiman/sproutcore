@@ -681,7 +681,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     this.dragging = NO;
   },
 
-  touchesDragged: function(touches, evt) {
+  touchesDragged: function(evt, touches) {
     var touch = this.touch,
         touchY = evt.pageY,
         offsetY = touch.startScrollOffset.y,

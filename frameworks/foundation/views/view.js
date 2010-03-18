@@ -1760,14 +1760,8 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     if(!this.respondsTo('touchEnd') && this.respondsTo('mouseUp')) {
       this.touchEnd=this.mouseUp;
     }
-    if(!this.respondsTo('touchMoved') && this.respondsTo('mouseMove')) {
+    if(!this.respondsTo('touchesDragged') && this.respondsTo('mouseDragged')) {
       this.touchMoved=this.mouseMove;
-    }
-    if(!this.respondsTo('touchEntered') && this.respondsTo('mouseEntered')) {
-      this.touchEntered=this.mouseEntered;
-    }
-    if(!this.respondsTo('touchExited') && this.respondsTo('mouseExited')) {
-      this.touchExited=this.mouseExited;
     }
   },
   
