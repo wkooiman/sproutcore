@@ -493,7 +493,8 @@ SC.RootResponder = SC.Object.extend({
     if (!this._touchedViews[SC.guidFor(view)]) {
       this._touchedViews[SC.guidFor(view)] = {
         view: view,
-        touches: SC.CoreSet.create([])
+        touches: SC.CoreSet.create([]),
+        touchCount: 0
       };
       view.set("hasTouch", YES);
     }
@@ -501,6 +502,7 @@ SC.RootResponder = SC.Object.extend({
     // add touch
     touch.view = view;
     this._touchedViews[SC.guidFor(view)].touches.add(touch);
+    this._touchedViews[SC.guidFor(view)].touches.touchCount++;
   },
   
   unassignTouch: function(touch) {
@@ -514,9 +516,10 @@ SC.RootResponder = SC.Object.extend({
     // get view entry
     viewEntry = this._touchedViews[SC.guidFor(view)];
     viewEntry.touches.remove(touch);
+    viewEntry.touchCount--;
     
     // remove view entry if needed
-    if (viewEntry.touches.length < 1) {
+    if (viewEntry.touchCount < 1) {
       view.set("hasTouch", NO);
       viewEntry.view = null;
       delete this._touchedViews[SC.guidFor(view)];
@@ -572,13 +575,13 @@ SC.RootResponder = SC.Object.extend({
     
     // if the item is in the stack, we will go to it (whether shouldStack is true or not) 
     // as it is already stacked
+    this.unassignTouch(touch);
     if (!shouldStack || (stack.indexOf(responder) > -1 && stack[stack.length - 1] !== responder)) {
       
       // pop all other items
       var idx = stack.length - 1, last = stack[idx];
       while (last && last !== responder) {
         // unassign the touch
-        this.unassignTouch(touch);
         touchesForView = this.touchesForView(last); // won't even exist if there are no touches
         
         // send touchCancelled (or, don't, if the view doesn't accept multitouch and it is not the last touch)
@@ -809,6 +812,7 @@ SC.RootResponder = SC.Object.extend({
             // next
             responderIdx--;
             responder = responders[responderIdx];
+            action = "touchCancelled"; // any further ones receive cancelled
           }
         }
         

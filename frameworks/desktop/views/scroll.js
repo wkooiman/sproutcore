@@ -688,7 +688,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
         maxOffset = this.get('maximumVerticalScrollOffset');
 
     var deltaY = touchY - touch.startTouchOffset.y;
-
+    
     if (!touch.dragging) {
       // give the user 5 pixels of wiggle room before we begin a drag
       if (Math.abs(deltaY) > 5) {
@@ -740,6 +740,12 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       touchStatus.offsetBeforeDeceleration = { y: this.get('verticalScrollOffset') };
       this.startDecelerationAnimation(touch);
     }
+  },
+  
+  touchCancelled: function(touch) {
+    this.tracking = NO;
+    this.dragging = NO;
+    this.touch = null;
   },
 
   startDecelerationAnimation: function(evt) {
