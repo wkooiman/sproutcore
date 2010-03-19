@@ -538,6 +538,8 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     var vscroll = this.get('hasVerticalScroller') ? this.get('verticalScrollerView') : null ;
     var hasVertical = vscroll && this.get('isVerticalScrollerVisible') ;
     
+    if (SC.browser.touch) hasVertical = hasHorizontal = NO;
+    
     // get the containerView
     var clip = this.get('containerView') ;
     var clipLayout = { left: 0, top: 0 } ;
@@ -626,13 +628,16 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     return YES;
   },
   
+  touchGeneration: 0,
   touchStart: function(touch) {
+    var generation = ++this.touchGeneration;
     // Initialize start state
     this.beginTouchTracking(touch);
-    this.invokeLater(this.beginTouchesInContent, 150);    
+    this.invokeLater(this.beginTouchesInContent, 150, generation);
   },
 
-  beginTouchesInContent: function() {
+  beginTouchesInContent: function(gen) {
+    if (gen !== this.touchGeneration) return;
     var touch = this.touch, itemView;
     if (touch && touch.tracking && !touch.dragging) {
       touch.touch.captureTouch(this, YES);
@@ -671,6 +676,8 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       lastEventTime: touch.timeStamp,
       scrollVelocityX: 0,
       scrollVelocityY: 0,
+      layer: this.get("contentView").get('layer'),
+      maximumVerticalScroll: this.get('maximumVerticalScrollOffset'),
 
       tracking: YES,
       dragging: NO,
@@ -685,7 +692,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     var touch = this.touch,
         touchY = evt.pageY,
         offsetY = touch.startScrollOffset.y,
-        maxOffset = this.get('maximumVerticalScrollOffset');
+        maxOffset = touch.maximumVerticalScroll;
 
     var deltaY = touchY - touch.startTouchOffset.y;
     
@@ -711,13 +718,13 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     // update immediately first
     this._scroll_verticalScrollOffset = Math.max(0,Math.min(Math.round(offsetY), maxOffset));
     var transform = 'translate3d('+ -0 +'px, '+ -this._scroll_verticalScrollOffset+'px, 0)';
-    this.get("contentView").get('layer').style.webkitTransform = transform;
+    touch.layer.style.webkitTransform = transform;
     
     // now update the "proper" way
-    this.set('verticalScrollOffset', Math.max(0,Math.min(offsetY, maxOffset)));
+    // this.set('verticalScrollOffset', Math.max(0,Math.min(offsetY, maxOffset)));
     if (evt.timeStamp - touch.lastEventTime >= 50) {
-      var horizontalOffset = this.get('horizontalScrollOffset');
-      var verticalOffset = this.get('verticalScrollOffset');
+      var horizontalOffset = this._scroll_horizontalScrollOffset;
+      var verticalOffset = this._scroll_verticalScrollOffset;
       
       touch.scrollVelocityX = ((horizontalOffset - touch.lastHorizontalOffset) / (evt.timeStamp - touch.lastEventTime)); // in px per ms
       touch.scrollVelocityY = ((verticalOffset - touch.lastVerticalOffset) / (evt.timeStamp - touch.lastEventTime)); // in px per ms
@@ -737,7 +744,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       touchStatus.dragging = NO;
       touchStatus.lastEventTime = touch.timeStamp;
       
-      touchStatus.offsetBeforeDeceleration = { y: this.get('verticalScrollOffset') };
+      touchStatus.offsetBeforeDeceleration = { y: this._scroll_verticalScrollOffset };
       this.startDecelerationAnimation(touch);
     } else {
       // trigger touchStart/End on actual target view if possible

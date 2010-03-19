@@ -102,7 +102,7 @@ SC.Event = function(originalEvent) {
   }
   
   // translate X/Y coordinates of touch into a real target
-  if (SC.browser.touch) {
+  if (SC.browser.touch && this.type == "touchstart") {
     var touches = this.changedTouches, target, elem;
     if (touches && touches.length > 0) {
       var firstTouch = touches[0];
