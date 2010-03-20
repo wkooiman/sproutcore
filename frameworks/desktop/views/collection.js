@@ -468,6 +468,12 @@ SC.CollectionView = SC.View.extend(
   },
   
   /**
+    A setting for ScrollView to optionally set, that makes "nowShowing" cover additional
+    space below and above. This helps the touch version of ScrollView
+  */
+  extraForScroll: { left: 0, top: 0, right: 0, bottom: 0 },
+  
+  /**
     Compute the nowShowing index set.  The default implementation simply 
     returns the full range.  Override to implement incremental rendering.
     
@@ -477,7 +483,13 @@ SC.CollectionView = SC.View.extend(
     @returns {SC.IndexSet} new now showing range
   */
   computeNowShowing: function() {
-    var r = this.contentIndexesInRect(this.get('clippingFrame'));
+    var rect = this.get('clippingFrame'), extra = this.get("extraForScroll");
+    rect.y -= extra.top; rect.height += extra.top;
+    rect.x -= extra.left; rect.width += extra.left;
+    rect.width += extra.right;
+    rect.height += extra.bottom;
+    
+    var r = this.contentIndexesInRect(rect);
     if (!r) r = this.get('allContentIndexes'); // default show all
 
     // make sure the index set doesn't contain any indexes greater than the

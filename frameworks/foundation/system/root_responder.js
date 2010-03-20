@@ -795,6 +795,8 @@ SC.RootResponder = SC.Object.extend({
         touch = touches[idx];
         touchEntry = this._touches[touch.identifier];
         touchEntry.timeStamp = evt.timeStamp;
+        touchEntry.pageX = touch.pageX;
+        touchEntry.pageY = touch.pageY;
         
         // unassign
         this.unassignTouch(touchEntry);
