@@ -300,9 +300,24 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     The container view that will contain your main content view.  You can 
     replace this property with your own custom subclass if you prefer.
     
+    The default is a ContainerView which has a contentClippingFrame that will
+    be normal on desktop, but will show three screenfulls on touch devices (making
+    scrolling a bit nicer).
+    
     @type {SC.ContainerView}
   */
-  containerView: SC.ContainerView,
+  containerView: SC.ContainerView.extend({
+    contentClippingFrame: function() {
+      var f = SC.clone(this.get("clippingFrame"));
+      if (SC.browser.touch) {
+        f.x -= f.width;
+        f.width += f.width * 2;
+        f.y -= f.height;
+        f.height += f.height * 2;
+      }
+      return f;
+    }.property("clippingFrame")
+  }),
   
   // ..........................................................
   // METHODS
@@ -623,7 +638,13 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       this._scroll_wheelDeltaX = 0;
     }
   },
-
+  
+  
+  
+  /*..............................................
+    TOUCH SUPPORT
+  */
+  
   captureTouch: function(touch) {
     return YES;
   },
@@ -930,13 +951,6 @@ SC.ScrollView = SC.View.extend(SC.Border, {
         height = (f) ? f.height : 0,
         dim    = this.get('frame'),
         ourFrame = this.get("frame");
-    
-    view.set("extraForScroll", {
-      left: ourFrame.width,
-      right: ourFrame.width,
-      top: ourFrame.height * 2, // for momentum common case
-      bottom: ourFrame.height * 2
-    });
     
     // cache out scroll settings...
     //if ((width === this._scroll_contentWidth) && (height === this._scroll_contentHeight)) return ;

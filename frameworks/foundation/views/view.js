@@ -2358,18 +2358,18 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
   
   /**
     The clipping frame returns the visible portion of the view, taking into
-    account the clippingFrame of the parent view.  Keep in mind that the 
+    account the contentClippingFrame of the parent view.  Keep in mind that the 
     clippingFrame is in the context of the view itself, not it's parent view.
     
     Normally this will be calculate based on the intersection of your own 
-    clippingFrame and your parentView's clippingFrame.  
+    clippingFrame and your parentView's contentClippingFrame.
 
     @property {Rect}
   */
   clippingFrame: function() {
     var pv= this.get('parentView'), f = this.get('frame'), ret = f, cf ;
     if (pv) {
-      cf = pv.get('clippingFrame');
+      cf = pv.get('contentClippingFrame');
       ret = SC.intersectRects(cf, f);
     }
 
@@ -2378,6 +2378,14 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
 
     return ret ;
   }.property('parentView', 'frame').cacheable(),
+  
+  /**
+    The clipping frame child views should intersect with.
+    The default value is the clipping frame.
+  */
+  contentClippingFrame: function() {
+    return this.get("clippingFrame");
+  }.property('clippingFrame').cacheable(),
   
   /** @private
     Whenever the clippingFrame changes, this observer will fire, notifying
@@ -2389,7 +2397,7 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
       cv = cvs[idx] ;
       if (!cv.hasStaticLayout) cv.notifyPropertyChange('clippingFrame') ;
     }
-  }.observes('clippingFrame'),
+  }.observes('contentClippingFrame'),
     
   /** 
     This method may be called on your view whenever the parent view resizes.
