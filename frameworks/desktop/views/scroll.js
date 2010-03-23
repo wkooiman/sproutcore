@@ -700,6 +700,12 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       scrollVelocityY: 0,
       layer: this.get("contentView").get('layer'),
       maximumVerticalScroll: this.get('maximumVerticalScrollOffset'),
+      
+      resistanceCoefficientY: 0.998,
+      resistanceAsymptoteY: 320,
+      
+      decelerationFromEdge: .05,
+      accelerationFromEdge: .08,
 
       tracking: YES,
       dragging: NO,
@@ -708,6 +714,19 @@ SC.ScrollView = SC.View.extend(SC.Border, {
 
     this.tracking = YES;
     this.dragging = NO;
+  },
+  
+  _adjustForEdgeResistance: function(offset, maxOffset, resistanceCoefficient, asymptote) {
+    var distanceFromEdge;
+    if (offset < 0) distanceFromEdge = offset;
+    else if (offset > maxOffset) distanceFromEdge = maxOffset - offset;
+    else return offset;
+    
+    distanceFromEdge = Math.pow(resistanceCoefficient, Math.abs(distanceFromEdge)) * asymptote;
+    if (offset < 0) distanceFromEdge = distanceFromEdge - asymptote;
+    else distanceFromEdge = -distanceFromEdge + asymptote;
+    
+    return Math.min(Math.max(0, offset), maxOffset) + distanceFromEdge;
   },
 
   touchesDragged: function(evt, touches) {
@@ -720,7 +739,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     
     if (!touch.dragging) {
       // give the user 5 pixels of wiggle room before we begin a drag
-      if (Math.abs(deltaY) > 5) {
+      if (Math.abs(deltaY) > 1) {
         touch.dragging = YES;
         touch.firstDrag = YES;
       } else return;
@@ -735,14 +754,15 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       }
     }
     
+    touch.lastRawScrollY = offsetY;
     // update immediately first
-    this._scroll_verticalScrollOffset = Math.max(0,Math.min(Math.round(offsetY), maxOffset));
+    this._scroll_verticalScrollOffset = this._adjustForEdgeResistance(offsetY, maxOffset, touch.resistanceCoefficientY, touch.resistanceAsymptoteY);
     var transform = 'translate3d('+ -0 +'px, '+ -this._scroll_verticalScrollOffset+'px, 0)';
     touch.layer.style.webkitTransform = transform;
     
     // now update the "proper" way
     // this.set('verticalScrollOffset', Math.max(0,Math.min(offsetY, maxOffset)));
-    if (evt.timeStamp - touch.lastEventTime >= 10 || touch.lastEventTime === 0) {
+    if (evt.timeStamp - touch.lastEventTime >= 10) {
       var horizontalOffset = this._scroll_horizontalScrollOffset;
       var verticalOffset = this._scroll_verticalScrollOffset;
       
@@ -760,11 +780,10 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     this.tracking = NO;
     touchStatus.tracking = NO;
     this.dragging = NO;
-    if (touchStatus.dragging || Math.abs(touch.pageY - touch.startY) > 5) {
+    if (touchStatus.dragging || Math.abs(touch.pageY - touch.startY) > 2) {
       touchStatus.dragging = NO;
       touchStatus.lastEventTime = touch.timeStamp;
       
-      touchStatus.offsetBeforeDeceleration = { y: this._scroll_verticalScrollOffset };
       this.startDecelerationAnimation(touch);
     } else {
       // trigger touchStart/End on actual target view if possible
@@ -782,8 +801,8 @@ SC.ScrollView = SC.View.extend(SC.Border, {
   startDecelerationAnimation: function(evt) {
     var touch = this.touch;
     
-    touch.lastFrameUpdateTime = touch.decelerationStarted = Date.now();
     touch.decelerationVelocity = { y: touch.scrollVelocityY * 10 };
+    
     this.decelerateAnimation();
   },
 
@@ -792,35 +811,51 @@ SC.ScrollView = SC.View.extend(SC.Border, {
         maxOffset = this.get('maximumVerticalScrollOffset'),
         newY = this._scroll_verticalScrollOffset + touch.decelerationVelocity.y,
         now = Date.now(),
-        t = now - touch.lastEventTime;
+        t = Math.max(now - touch.lastEventTime, 1);
     
-    this._scroll_verticalScrollOffset = Math.max(0,Math.min(Math.round(newY), maxOffset));
+    // update scroll
+    this._scroll_verticalScrollOffset = newY;
     var transform = 'translate3d('+ -0 +'px, '+ -this._scroll_verticalScrollOffset+'px, 0)';
     this.get("contentView").get('layer').style.webkitTransform = transform;
     
-    if (now - touch.decelerationStarted > 100) {
-      touch.decelerationVelocity.y = touch.decelerationVelocity.y * Math.pow(0.950, (t / 10));
+    // update velocity
+    var decay = 0.950;
+    touch.decelerationVelocity.y *= Math.pow(decay, (t / 10));
+    if (newY < 0) {
+      if (touch.decelerationVelocity.y < 0) { // still going up
+        touch.decelerationVelocity.y = touch.decelerationVelocity.y +  (-newY * touch.decelerationFromEdge);
+      } else {
+        touch.decelerationVelocity.y = (-newY * touch.accelerationFromEdge);
+      }
+    } else if (newY > maxOffset) {
+      if (touch.decelerationVelocity.y > 0) { // still going down
+        // difference * decelerationFromEdge
+        touch.decelerationVelocity.y = touch.decelerationVelocity.y - ( (newY - maxOffset) * touch.decelerationFromEdge);
+      } else {
+        touch.decelerationVelocity.y = -((newY - maxOffset) * touch.accelerationFromEdge);
+      }
     }
-
-    var self = this;
+ 
+    // if we ain't got no velocity... then we must be finished
     var absYVelocity = Math.abs(touch.decelerationVelocity.y);
-    if (absYVelocity < 1) {
-      touch.decelerationVelocity.y = 0;
-      touch.decelerating = NO;
+    if (absYVelocity < 1 && newY > 0 && newY < maxOffset) {
       touch.timeout = null;
+      
       SC.RunLoop.begin();
-      self.set("verticalScrollOffset", self._scroll_verticalScrollOffset);
+      this.set("verticalScrollOffset", this._scroll_verticalScrollOffset);
       SC.RunLoop.end();
       return;
     }
-        
-    touch.lastEventTime = Date.now();
     
+    
+    // next round
+    var self = this;
+    touch.lastEventTime = Date.now();
     this.touch.timeout = setTimeout(function(){
       self.decelerateAnimation();
     }, 10);
   },
-
+  
   // ..........................................................
   // INTERNAL SUPPORT
   // 
