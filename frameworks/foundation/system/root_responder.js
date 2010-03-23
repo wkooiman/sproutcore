@@ -571,7 +571,16 @@ SC.RootResponder = SC.Object.extend({
     var stack = touch.touchResponders, touchesForView;
 
     // find the actual responder (if any, I suppose)
+    // note that the pane's sendEvent function is slightly clever:
+    // if the target is already touch responder, it will just return it without calling touchStart
+    // we must do the same.
+    if (touch.touchResponder === responder) return;
+    
+    // send touchStart
     responder = this.sendEvent("touchStart", touch, responder);
+
+    // and again, now that we have more detail.
+    if (touch.touchResponder === responder) return;    
     
     // if the item is in the stack, we will go to it (whether shouldStack is true or not) 
     // as it is already stacked

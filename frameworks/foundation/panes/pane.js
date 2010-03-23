@@ -193,6 +193,11 @@ SC.Pane = SC.View.extend( /** @scope SC.Pane.prototype */ {
     // walk up the responder chain looking for a method to handle the event
     if (!target) target = this.get('firstResponder') ;
     while(target) {
+      // special case 1: if touchStart && the target is already the touch responder,
+      // just return the target–don't bother sending touchStart again
+      if (action === 'touchStart' && evt.touchResponder === target) break;
+      
+      // special case 2: handle acceptsMultitouch
       if (action === 'touchStart' && !target.get("acceptsMultitouch")) {
         if (target.tryToPerform("touchStart", evt)) break;
       } else if (action === 'touchEnd' && !target.get("acceptsMultitouch")) {

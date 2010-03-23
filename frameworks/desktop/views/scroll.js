@@ -694,7 +694,6 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       
       enableScrolling: { x: YES, y: YES }, // TODO: get from class properties
       scrolling: { x: NO, y: NO },
-      scrollTolerance: { x: 5, y: 5 },
       
       // offsets and velocities
       startScrollOffset: { x: horizontalScrollOffset, y: verticalScrollOffset },
@@ -714,6 +713,11 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       resistanceAsymptote: 320,
       decelerationFromEdge: 0.05,
       accelerationToEdge: 0.08,
+      
+      // how much percent of the other drag direction you must drag to start dragging that direction too.
+      scrollTolerance: { x: 5, y: 5 },
+      secondaryScrollTolerance: 20,
+      scrollLock: 100,
 
       // general status
       lastEventTime: 0,      
@@ -753,32 +757,44 @@ SC.ScrollView = SC.View.extend(SC.Border, {
         maxOffsetY = touch.maximumScroll.y,
         touchX = evt.pageX,
         offsetX = touch.startScrollOffset.x,
-        maxOffsetX = touch.maximumScroll.y;
+        maxOffsetX = touch.maximumScroll.x;
 
     // calculate deltas
     var deltaY = touchY - touch.startTouchOffset.y,
         deltaX = touchX - touch.startTouchOffset.x;
     
     if (!touch.scrolling.x && Math.abs(deltaX) > touch.scrollTolerance.x && touch.enableScrolling.x) {
-      touch.startTouchOffset.x = touchX;
-      touch.scrolling.x = YES;
+      // say we are scrolling
       this.dragging = YES;
+      touch.scrolling.x = YES;
+      touch.scrollTolerance.y = touch.secondaryScrollTolerance;
+      
+      // reset position
+      touch.startTouchOffset.x = touchX;
+      deltaX = 0;
     }
     if (!touch.scrolling.y && Math.abs(deltaY) > touch.scrollTolerance.y && touch.enableScrolling.y) {
-      touch.startTouchOffset.y = touchY;
-      touch.scrolling.y = YES;
+      // say we are scrolling
       this.dragging = YES;
+      touch.scrolling.y = YES;
+      touch.scrollTolerance.x = touch.secondaryScrollTolerance;
+      
+      // reset position
+      touch.startTouchOffset.y = touchY;
+      deltaY = 0;
     }
     
     // calculate new offset
     if (!touch.scrolling.x && !touch.scrolling.y) return;
     if (touch.scrolling.x) {
       offsetX = offsetX - deltaX;
-      touch.scrollTolerance.y = Math.abs(deltaX);
+      touch.scrollTolerance.y = touch.secondaryScrollTolerance;
+      if (deltaX > touch.scrollLock && !touch.scrolling.y) touch.enableScrolling.y = NO;
     }
     if (touch.scrolling.y) {
       offsetY = offsetY - deltaY;
-      touch.scrollTolerance.x = Math.abs(deltaY);
+      touch.scrollTolerance.x = touch.secondaryScrollTolerance;
+      if (deltaY > touch.scrollLock && !touch.scrolling.x) touch.enableScrolling.x = NO;
     }
     
     
@@ -791,7 +807,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     
     // now update the "proper" way
     // this.set('verticalScrollOffset', Math.max(0,Math.min(offsetY, maxOffset)));
-    if (evt.timeStamp - touch.lastEventTime >= 100) {
+    if (evt.timeStamp - touch.lastEventTime >= 10) {
       var horizontalOffset = this._scroll_horizontalScrollOffset;
       var verticalOffset = this._scroll_verticalScrollOffset;
       
@@ -828,7 +844,6 @@ SC.ScrollView = SC.View.extend(SC.Border, {
   },
   
   touchCancelled: function(touch) {
-    console.error("CANCEL");
     this.tracking = NO;
     this.dragging = NO;
     this.touch = null;
@@ -866,7 +881,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
 
   decelerateAnimation: function() {
     var touch = this.touch,
-        maxOffsetX = touch.maximumScroll.y,
+        maxOffsetX = touch.maximumScroll.x,
         maxOffsetY = touch.maximumScroll.y,
         newX = this._scroll_horizontalScrollOffset + touch.decelerationVelocity.x,
         newY = this._scroll_verticalScrollOffset + touch.decelerationVelocity.y,
