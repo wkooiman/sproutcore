@@ -807,7 +807,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     
     // now update the "proper" way
     // this.set('verticalScrollOffset', Math.max(0,Math.min(offsetY, maxOffset)));
-    if (evt.timeStamp - touch.lastEventTime >= 10) {
+    if (evt.timeStamp - touch.lastEventTime >= 10 || touch.lastEventTime < 1) {
       var horizontalOffset = this._scroll_horizontalScrollOffset;
       var verticalOffset = this._scroll_verticalScrollOffset;
       
