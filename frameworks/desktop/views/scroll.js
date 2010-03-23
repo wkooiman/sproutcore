@@ -660,7 +660,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
   beginTouchesInContent: function(gen) {
     if (gen !== this.touchGeneration) return;
     var touch = this.touch, itemView;
-    if (touch && touch.tracking && !touch.dragging) {
+    if (touch && this.tracking && !this.dragging) {
       touch.touch.captureTouch(this, YES);
     }
   },
@@ -692,7 +692,9 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     this.touch = {
       startTime: touch.timeStamp,
       
-      enableScroll: { x: YES, y: YES }, // TODO: get from class properties
+      enableScrolling: { x: YES, y: YES }, // TODO: get from class properties
+      scrolling: { x: NO, y: NO },
+      scrollTolerance: { x: 5, y: 5 },
       
       // offsets and velocities
       startScrollOffset: { x: horizontalScrollOffset, y: verticalScrollOffset },
@@ -714,8 +716,6 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       accelerationToEdge: 0.08,
 
       // general status
-      tracking: YES,
-      dragging: NO,
       lastEventTime: 0,      
       
       // the touch used
@@ -759,21 +759,27 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     var deltaY = touchY - touch.startTouchOffset.y,
         deltaX = touchX - touch.startTouchOffset.x;
     
-    // 
-    if (!touch.dragging) {
-      if (deltaX > 5 || deltaY > 5) { // we support horizontal scrolling now.
-        // figure out if we are primarily going X or Y
-        touch.dragging = YES;
-        
-        if (Math.abs(deltaX) - Math.abs(deltaY) > 5) touch.enableScroll.y = NO;
-        else if (Math.abs(deltaY) - Math.abs(deltaX) > 5) touch.enableScroll.x = NO;
-        
-      } else return;
+    if (!touch.scrolling.x && Math.abs(deltaX) > touch.scrollTolerance.x && touch.enableScrolling.x) {
+      touch.startTouchOffset.x = touchX;
+      touch.scrolling.x = YES;
+      this.dragging = YES;
+    }
+    if (!touch.scrolling.y && Math.abs(deltaY) > touch.scrollTolerance.y && touch.enableScrolling.y) {
+      touch.startTouchOffset.y = touchY;
+      touch.scrolling.y = YES;
+      this.dragging = YES;
     }
     
     // calculate new offset
-    if (touch.enableScroll.x) offsetX = offsetX - deltaX;
-    if (touch.enableScroll.y) offsetY = offsetY - deltaY;
+    if (!touch.scrolling.x && !touch.scrolling.y) return;
+    if (touch.scrolling.x) {
+      offsetX = offsetX - deltaX;
+      touch.scrollTolerance.y = Math.abs(deltaX);
+    }
+    if (touch.scrolling.y) {
+      offsetY = offsetY - deltaY;
+      touch.scrollTolerance.x = Math.abs(deltaY);
+    }
     
     
     // update immediately, without consulting anyone else.
@@ -801,7 +807,6 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     var touchStatus = this.touch;
     
     this.tracking = NO;
-    touchStatus.tracking = NO;
     this.dragging = NO;
     if (touchStatus.dragging || Math.abs(touch.pageY - touch.startY) > 2) {
       touchStatus.dragging = NO;
@@ -823,6 +828,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
   },
   
   touchCancelled: function(touch) {
+    console.error("CANCEL");
     this.tracking = NO;
     this.dragging = NO;
     this.touch = null;
@@ -830,7 +836,6 @@ SC.ScrollView = SC.View.extend(SC.Border, {
 
   startDecelerationAnimation: function(evt) {
     var touch = this.touch;
-    
     touch.decelerationVelocity = {
       x: touch.scrollVelocity.x * 10,
       y: touch.scrollVelocity.y * 10
@@ -845,6 +850,8 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     
     Bouncing is fun. Functions that handle it should have fun names,
     don'tcha think?
+    
+    P.S.: should this be named "bouncityBounce" instead?
   */
   bouncyBounce: function(velocity, value, minValue, maxValue, de, ac) {
     if (value < minValue) {
@@ -865,7 +872,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
         newY = this._scroll_verticalScrollOffset + touch.decelerationVelocity.y,
         now = Date.now(),
         t = Math.max(now - touch.lastEventTime, 1);
-    
+
     // update scroll
     this._scroll_horizontalScrollOffset = newX;
     this._scroll_verticalScrollOffset = newY;
@@ -885,7 +892,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     // if we ain't got no velocity... then we must be finished
     var absXVelocity = Math.abs(touch.decelerationVelocity.x);
     var absYVelocity = Math.abs(touch.decelerationVelocity.y);
-    if (absYVelocity < 1 && absXVelocity < 1 && newY > 0 && newY < maxOffsetY && newX > 0 && newX < maxOffsetX) {
+    if (absYVelocity < 0.01 && absXVelocity < 0.01) {
       touch.timeout = null;
       
       SC.RunLoop.begin();
@@ -894,7 +901,6 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       SC.RunLoop.end();
       return;
     }
-    
     
     // next round
     var self = this;
