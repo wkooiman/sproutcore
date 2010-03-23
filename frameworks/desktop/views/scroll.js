@@ -691,6 +691,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     
     this.touch = {
       startTime: touch.timeStamp,
+      notCalculated: YES,
       
       enableScrolling: { x: YES, y: YES }, // TODO: get from class properties
       scrolling: { x: NO, y: NO },
@@ -720,7 +721,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       scrollLock: 100,
 
       // general status
-      lastEventTime: 0,      
+      lastEventTime: touch.timeStamp,      
       
       // the touch used
       touch: touch
@@ -748,14 +749,16 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     // generate final value
     return Math.min(Math.max(0, offset), maxOffset) + distanceFromEdge;
   },
-
+  
   touchesDragged: function(evt, touches) {
+    this.updateTouchScroll(evt.pageX, evt.pageY, evt.timeStamp);
+  },
+  
+  updateTouchScroll: function(touchX, touchY, timeStamp) {
     // get some vars
     var touch = this.touch,
-        touchY = evt.pageY,
         offsetY = touch.startScrollOffset.y,
         maxOffsetY = touch.maximumScroll.y,
-        touchX = evt.pageX,
         offsetX = touch.startScrollOffset.x,
         maxOffsetX = touch.maximumScroll.x;
 
@@ -805,17 +808,16 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     var transform = 'translate3d('+ -this._scroll_horizontalScrollOffset +'px, '+ -this._scroll_verticalScrollOffset+'px, 0)';
     touch.layer.style.webkitTransform = transform;
     
-    // now update the "proper" way
-    // this.set('verticalScrollOffset', Math.max(0,Math.min(offsetY, maxOffset)));
-    if (evt.timeStamp - touch.lastEventTime >= 10 || touch.lastEventTime < 1) {
+    if (timeStamp - touch.lastEventTime >= 1 || touch.notCalculated) {
+      touch.notCalculated = NO;
       var horizontalOffset = this._scroll_horizontalScrollOffset;
       var verticalOffset = this._scroll_verticalScrollOffset;
       
-      touch.scrollVelocity.x = ((horizontalOffset - touch.lastScrollOffset.x) / Math.max(1, evt.timeStamp - touch.lastEventTime)); // in px per ms
-      touch.scrollVelocity.y = ((verticalOffset - touch.lastScrollOffset.y) / Math.max(1, evt.timeStamp - touch.lastEventTime)); // in px per ms
+      touch.scrollVelocity.x = ((horizontalOffset - touch.lastScrollOffset.x) / Math.max(1, timeStamp - touch.lastEventTime)); // in px per ms
+      touch.scrollVelocity.y = ((verticalOffset - touch.lastScrollOffset.y) / Math.max(1, timeStamp - touch.lastEventTime)); // in px per ms
       touch.lastScrollOffset.x = horizontalOffset;
       touch.lastScrollOffset.y = verticalOffset;
-      touch.lastEventTime = evt.timeStamp;
+      touch.lastEventTime = timeStamp;
     }
   },
 
@@ -824,13 +826,12 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     
     this.tracking = NO;
     this.dragging = NO;
-    if (touchStatus.dragging || Math.abs(touch.pageY - touch.startY) > 2) {
+    if (
+        touchStatus.dragging || 
+        Math.abs(touch.pageY - touchStatus.startTouchOffset.y) > 2 || 
+        Math.abs(touch.pageX - touchStatus.startTouchOffset.x) > 2
+    ) {
       touchStatus.dragging = NO;
-      
-      // reset scroll velocity if we haven't moved
-      if (touch.timeStamp - touchStatus.lastEventTime > 100) {
-        touchStatus.scrollVelocity.x = touchStatus.scrollVelocity.y = 0;
-      }
       
       // reset last event time
       touchStatus.lastEventTime = touch.timeStamp;
