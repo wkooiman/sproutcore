@@ -35,6 +35,8 @@ aView: SC.LabelView.design(SC.Animatable, {
 @extends SC.Object
 */
 SC.Animatable = {
+  /** @scope SC.Animatable.prototype */
+  
   /**
   Walks like a duck.
   */
@@ -256,6 +258,7 @@ SC.Animatable = {
   
   /**
     Stops all JavaScript animations on the object. In their tracks. Hah hah.
+    @private
   */
   _stopJavaScriptAnimations: function() {
     for (var i in this._animators) {
@@ -583,6 +586,7 @@ SC.Animatable = {
   },
 
   /**
+  @private
   Adjusts display and queues a change for the other properties.
   
   layer: the layer to modify
@@ -750,6 +754,7 @@ SC.Animatable = {
   },
 
   /**
+  @private
   Solves cubic bezier curves. Basically, returns the Y for the supplied X.
 
   I have only a vague idea of how this works. But I do have a vague idea. It is originally
@@ -809,6 +814,7 @@ SC.Animatable = {
   },
 
   /**
+  @private
   Manages a single step in a single animation.
   NOTE: this=>an animator hash
   */
@@ -883,6 +889,7 @@ SC.Animatable = {
   },
 
   /**
+  @private
   Manages a single step in a single animation.
   NOTE: this=>an animator hash
   */
@@ -994,23 +1001,42 @@ SC.Animatable = {
 Add Singleton Portion
 */
 SC.mixin(SC.Animatable, {
+  /** @scope SC.Animatable */
   NAMESPACE: 'SC.Animatable',
   VERSION: '0.1.0',
 
-  // CSS-only
+  /** Linear transition **/
   TRANSITION_NONE: "linear",
+  
+  /** 'ease' transition if using CSS transitions; otherwise linear. **/
   TRANSITION_CSS_EASE: "ease",
+  
+  /** 'ease-in' transition if using CSS transitions; otherwise linear. **/
   TRANSITION_CSS_EASE_IN: "ease-in",
+  
+  /** 'ease-out' transition if using CSS transitions; otherwise linear. **/
   TRANSITION_CSS_EASE_OUT: "ease-out",
+  
+  /** 'ease-in-out' transition if using CSS transitions; otherwise linear. **/
   TRANSITION_CSS_EASE_IN_OUT: "ease-in-out",
 
-  // JavaScript-enabled
+  /** 'ease' transition. **/
   TRANSITION_EASE: [0.25, 0.1, 0.25, 1.0],
+  
   TRANSITION_LINEAR: [0.0, 0.0, 1.0, 1.0],
+  
+  /** 'ease-in' transition. **/
   TRANSITION_EASE_IN: [0.42, 0.0, 1.0, 1.0],
+  
+  /** 'ease-out' transition. **/
   TRANSITION_EASE_OUT: [0, 0, 0.58, 1.0],
+  
+  /** 'ease-in-out' transition if using CSS transitions; otherwise linear. **/
   TRANSITION_EASE_IN_OUT: [0.42, 0, 0.58, 1.0],
 
+  /**
+    The timing function which all SC.Animatables should default to.
+  */
   defaultTimingFunction: null, // you can change to TRANSITION_EASE, etc., but that may impact performance.
 
   // For performance, use a custom linked-list timer
@@ -1036,11 +1062,18 @@ SC.mixin(SC.Animatable, {
   
   enableCSSTransforms: NO, // automatically calculated (or, will be)
 
-  // keep track of some basic statistics in an object (so they can be observable)
+  /**
+    A hash of stats for any currently running animations. Currently has property
+    lastFPS, which is the FPS for the last JavaScript-based animation.
+  */
   stats: SC.Object.create({
     lastFPS: 0
   }),
-
+  
+  /**
+    Adds a timer.
+    @private
+  */
   addTimer: function(animator) {
     if (animator.isQueued) return;
     animator.prev = SC.Animatable.baseTimer;
@@ -1051,6 +1084,10 @@ SC.mixin(SC.Animatable, {
     if (!SC.Animatable.going) SC.Animatable.start();
   },
   
+  /**
+    Removes a timer.
+    @private
+  */
   removeTimer: function(animator) {
     if (!animator.isQueued) return;
     if (animator.next) animator.next.prev = animator.prev; // splice ;)
