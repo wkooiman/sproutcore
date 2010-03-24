@@ -644,6 +644,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
   /*..............................................
     TOUCH SUPPORT
   */
+  acceptsMultitouch: YES,
   
   captureTouch: function(touch) {
     return YES;
@@ -651,10 +652,11 @@ SC.ScrollView = SC.View.extend(SC.Border, {
   
   touchGeneration: 0,
   touchStart: function(touch) {
-    var generation = ++this.touchGeneration;
-    // Initialize start state
-    this.beginTouchTracking(touch);
-    this.invokeLater(this.beginTouchesInContent, 150, generation);
+    if (!this.tracking) {
+      var generation = ++this.touchGeneration;
+      this.invokeLater(this.beginTouchesInContent, 150, generation);
+    }
+    this.beginTouchTracking(touch, YES);
   },
 
   beginTouchesInContent: function(gen) {
@@ -673,7 +675,9 @@ SC.ScrollView = SC.View.extend(SC.Border, {
 
     @param {Event} evt
   */
-  beginTouchTracking: function(touch) {
+  beginTouchTracking: function(touch, starting) {
+    var avg = touch.averagedTouchesForView(this, starting);
+    
     var verticalScrollOffset = this._scroll_verticalScrollOffset || 0,
         horizontalScrollOffset = this._scroll_horizontalScrollOffset || 0;
     
@@ -699,7 +703,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       // offsets and velocities
       startScrollOffset: { x: horizontalScrollOffset, y: verticalScrollOffset },
       lastScrollOffset: { x: horizontalScrollOffset, y: verticalScrollOffset },
-      startTouchOffset: { x: touch.pageX, y: touch.pageY },
+      startTouchOffset: { x: avg.x, y: avg.y },
       scrollVelocity: { x: 0, y: 0 },
       
       // cache some things
@@ -751,7 +755,8 @@ SC.ScrollView = SC.View.extend(SC.Border, {
   },
   
   touchesDragged: function(evt, touches) {
-    this.updateTouchScroll(evt.pageX, evt.pageY, evt.timeStamp);
+    var avg = evt.averagedTouchesForView(this);
+    this.updateTouchScroll(avg.x, avg.y, evt.timeStamp);
   },
   
   updateTouchScroll: function(touchX, touchY, timeStamp) {
@@ -822,25 +827,30 @@ SC.ScrollView = SC.View.extend(SC.Border, {
   },
 
   touchEnd: function(touch) {
-    var touchStatus = this.touch;
+    var touchStatus = this.touch,
+        avg = touch.averagedTouchesForView(this);
     
-    this.tracking = NO;
-    this.dragging = NO;
-    if (
-        touchStatus.dragging || 
-        Math.abs(touch.pageY - touchStatus.startTouchOffset.y) > 2 || 
-        Math.abs(touch.pageX - touchStatus.startTouchOffset.x) > 2
-    ) {
-      touchStatus.dragging = NO;
-      
-      // reset last event time
-      touchStatus.lastEventTime = touch.timeStamp;
-      
-      this.startDecelerationAnimation();
+    if (avg.touchCount > 0) {
+      this.beginTouchTracking(touch, NO);
     } else {
-      // trigger touchStart/End on actual target view if possible
-      touch.captureTouch(this);
-      if (touch.touchResponder && touch.touchResponder !== this) touch.touchResponder.tryToPerform("touchEnd", touch);
+      this.tracking = NO;
+      this.dragging = NO;
+      if (
+          touchStatus.dragging || 
+          Math.abs(touch.pageY - touchStatus.startTouchOffset.y) > 2 || 
+          Math.abs(touch.pageX - touchStatus.startTouchOffset.x) > 2
+      ) {
+        touchStatus.dragging = NO;
+
+        // reset last event time
+        touchStatus.lastEventTime = touch.timeStamp;
+
+        this.startDecelerationAnimation();
+      } else {
+        // trigger touchStart/End on actual target view if possible
+        touch.captureTouch(this);
+        if (touch.touchResponder && touch.touchResponder !== this) touch.touchResponder.tryToPerform("touchEnd", touch);
+      }
     }
   },
   

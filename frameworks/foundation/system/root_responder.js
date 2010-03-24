@@ -488,6 +488,53 @@ SC.RootResponder = SC.Object.extend({
     }
   },
   
+  /**
+    Computes a hash with x, y, and d (distance) properties, containing the average position
+    of all touches, and the average distance of all touches from that average.
+    
+    This is useful for implementing scaling.
+  */
+  averagedTouchesForView: function(view) {
+    var t = this.touchesForView(view);
+    if (!t || t.length === 0) return {x: 0, y: 0, d: 0, touchCount: 0};
+    
+    var touches = t.toArray(), idx, len = touches.length, touch,
+        ax = 0, ay = 0, dx, dy, ad;
+    
+    // first, add
+    for (idx = 0; idx < len; idx++) {
+      touch = touches[idx];
+      ax += touch.pageX; ay += touch.pageY;
+    }
+    
+    // now, average
+    ax /= len;
+    ay /= len;
+    
+    // distance
+    for (idx = 0; idx < len; idx++) {
+      touch = touches[idx];
+      
+      // get distance from average
+      dx = Math.abs(touch.pageX - ax);
+      dy = Math.abs(touch.pageY - ay);
+      
+      // Pythagoras was clever...
+      ad += Math.pow(dx * dx + dy * dy, 0.5);
+    }
+    
+    // average
+    ad /= len;
+    
+    // return
+    return {
+      x: ax,
+      y: ay,
+      d: ad,
+      touchCount: len
+    };
+  },
+  
   assignTouch: function(touch, view) {
     // create view entry if needed
     if (!this._touchedViews[SC.guidFor(view)]) {
@@ -502,7 +549,7 @@ SC.RootResponder = SC.Object.extend({
     // add touch
     touch.view = view;
     this._touchedViews[SC.guidFor(view)].touches.add(touch);
-    this._touchedViews[SC.guidFor(view)].touches.touchCount++;
+    this._touchedViews[SC.guidFor(view)].touchCount++;
   },
   
   unassignTouch: function(touch) {
@@ -919,6 +966,36 @@ SC.Touch.prototype = {
   */
   touchesForView: function(view) {
     return this.touchContext.touchesForView(view);
+  },
+  
+  /**
+    Returns average data--x, y, and d (distance)--for the touches owned by the supplied view.
+    
+    addSelf adds this touch to the set being considered. This is useful from touchStart. If
+    you use it from anywhere else, it will make this touch be used twice--so use caution.
+  */
+  averagedTouchesForView: function(view, addSelf) {
+    var ret = this.touchContext.averagedTouchesForView(view);
+    if (addSelf) {
+      // reaverage x
+      ret.x *= ret.touchCount;
+      ret.y *= ret.touchCount;
+      ret.x += this.pageX;
+      ret.y += this.pageY;
+      ret.x /= ret.touchCount + 1;
+      ret.y /= ret.touchCount + 1;
+    
+      // reaverage distance
+      ret.d *= ret.touchCount;
+      ret.d += Math.pow(Math.pow(Math.abs(this.pageX - ret.x), 2), Math.pow(Math.abs(this.pageY - ret.y), 2), 0.5);
+      ret.d /= ret.touchCount + 1;
+    
+      // update touch count
+      ret.touchCount += 1;
+    }
+    
+    // return
+    return ret;
   }
 };
 
