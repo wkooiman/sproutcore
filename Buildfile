@@ -72,6 +72,10 @@ config :standard_theme,
   :test_required  => ['sproutcore/testing'],
   :debug_required => ['sproutcore/debug']
 
+# CONFIGURE DOCUMENTATION
+config :documentation,
+  :required => [:desktop, :animation]
+
 # CONFIGURE APPS
 config :core_tools, :required => [:desktop]
 
@@ -89,4 +93,3 @@ config :core_tools, :required => [:desktop]
   # end
   
 end
- 

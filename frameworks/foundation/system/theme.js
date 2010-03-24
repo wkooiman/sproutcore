@@ -12,11 +12,20 @@
   @since SproutCore 1.1
 */
 SC.Theme = SC.Object.extend({
+  /**@scope SC.Theme.prototype */
   concatenatedProperties: "classNames".w(),
+  
+  /**
+    Class names for the theme. All controls using this theme will have these class names
+    in their class names; for instance, if the value is ["ace", "light"], all views
+    using this theme (including child views of views using this theme) will have class
+    names like "sc-view sc-type-view sc-blah-blah ace light".
+  */
   classNames: []
 });
 
 SC.mixin(SC.Theme, {
+  /**@scope SC.Theme */
   /**
     Extends the theme, and makes sure theme.renderers points to the theme's prototype.
   */
