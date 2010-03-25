@@ -242,6 +242,7 @@ SC.SegmentedView = SC.View.extend(SC.Control,
     if (this._items) {
       this._items.addObserver('[]', this, this.itemContentDidChange) ;
     }
+    
     this.itemContentDidChange();
   }.observes('items'),
   
@@ -249,6 +250,7 @@ SC.SegmentedView = SC.View.extend(SC.Control,
     Invoked whenever the item array or an item in the array is changed.  This method will reginerate the list of items.
   */
   itemContentDidChange: function() {
+    this.set('renderLikeFirstTime', YES);
     this.notifyPropertyChange('displayItems');
   },
   
@@ -270,25 +272,23 @@ SC.SegmentedView = SC.View.extend(SC.Control,
     // collect some data 
     var items = this.get('displayItems');
     
-    // regenerate the buttons only if the new display items differs from the
-    // last cached version of it needsFirstDisplay is YES.
-    var last = this._seg_displayItems,
-      theme = this.get('theme');
+    var theme = this.get('theme');
     if (theme) context.addClass(theme);
-    if (firstTime || (items !== last)) {
+    if (firstTime || this.get('renderLikeFirstTime')) {
       this._seg_displayItems = items; // save for future
       this.renderDisplayItems(context, items) ;
       context.addStyle('text-align', this.get('align'));
+      this.set('renderLikeFirstTime',NO);
     }else{
     // update selection and active state
-      var activeIndex = this.get('activeIndex');
-      var value = this.get('value');
-      var isArray = SC.isArray(value);
+      var activeIndex = this.get('activeIndex'),
+          value = this.get('value'),
+          isArray = SC.isArray(value);
       if (isArray && value.get('length')===1) {
         value = value.objectAt(0); isArray = NO ;
       }
-      var names = {}; // reuse
-      var loc = items.length, cq = this.$('.sc-segment'), item;
+      var names = {}, // reuse  
+          loc = items.length, cq = this.$('.sc-segment'), item;
       while(--loc>=0) {
         item = items[loc];
         names.sel = isArray ? (value.indexOf(item[1])>=0) : (item[1]===value);
@@ -461,24 +461,50 @@ SC.SegmentedView = SC.View.extend(SC.Control,
   },
   
   mouseMoved: function(evt) {
-    var idx = this.displayItemIndexForEvent(evt);
-    if (this._isMouseDown) this.set('activeIndex', idx);
+    if (this._isMouseDown) {
+      var idx = this.displayItemIndexForEvent(evt);
+      this.set('activeIndex', idx);
+    }
     return YES;
   },
   
-  mouseOver: function(evt) {
+  mouseExited: function(evt) {
     // if mouse was pressed down initially, start detection again
-    var idx = this.displayItemIndexForEvent(evt);
-    if (this._isMouseDown) this.set('activeIndex', idx);
+    if (this._isMouseDown) {
+      var idx = this.displayItemIndexForEvent(evt);
+      this.set('activeIndex', idx);
+    }
     return YES;
   },
   
-  mouseOut: function(evt) {
+  mouseEntered: function(evt) {
     // if mouse was down, hide active index
-    if (this._isMouseDown) this.set('activeIndex', -1);
+    if (this._isMouseDown) {
+      var idx = this.displayItemIndexForEvent(evt);
+      this.set('activeIndex', -1);
+    }
     return YES ;
   },
   
+  touchStart: function(evt){
+    return this.mouseDown(evt);
+  },
+  
+  touchEnd: function(evt){
+    return this.mouseUp(evt);
+  },
+  
+  touchMoved: function(evt){
+    return this.mouseMoved(evt);
+  },
+  
+  touchEntered: function(evt){
+    return this.mouseEntered(evt);
+  },
+  
+  touchExited: function(evt){
+    return this.mouseExited(evt);
+  },
   /** 
     Simulates the user clicking on the segment at the specified index. This
     will update the value if possible and fire the action.
@@ -533,10 +559,10 @@ SC.SegmentedView = SC.View.extend(SC.Control,
     }
     
     // also, trigger target if needed.
-    var actionKey = this.get('itemActionKey');
-    var targetKey = this.get('itemTargetKey');
-    var action, target = null;
-    var resp = this.getPath('pane.rootResponder');
+    var actionKey = this.get('itemActionKey'),
+        targetKey = this.get('itemTargetKey'),
+        action, target = null,
+        resp = this.getPath('pane.rootResponder');
 
     if (actionKey && (item = this.get('items').objectAt(item[6]))) {
       // get the source item from the item array.  use the index stored...

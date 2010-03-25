@@ -362,7 +362,7 @@ SC.ScrollerView = SC.View.extend(
     position = (value/max)*(trackLength-thumbLength);
     position += capLength - capOverlap; // account for the top/left cap
 
-    return Math.floor(position);
+    return Math.floor(isNaN(position) ? 0 : position);
   }.property('value', 'maximum', 'trackLength', 'thumbLength').cacheable(),
 
   /**
@@ -522,6 +522,19 @@ SC.ScrollerView = SC.View.extend(
     length = this.get('trackLength') - this.get('thumbLength');
     this.set('value', Math.round( (thumbPosition/length) * this.get('maximum')));
     return YES;
+  },
+  
+  
+  touchStart: function(evt){
+    return this.mouseDown(evt);
+  },
+  
+  touchEnd: function(evt){
+    return this.mouseUp(evt);
+  },
+  
+  touchDragged: function(evt){
+    return this.mouseDragged(evt);
   },
 
   /**

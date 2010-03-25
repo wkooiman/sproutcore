@@ -269,6 +269,7 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
   */
   renderImage: function(context, firstTime){
     var icon = this.get('icon');
+    context.addClass('no-min-width');
     if(icon) context.push("<div class='img "+icon+"'></div>");
     else context.push("<div class='img'></div>");
   },
@@ -326,7 +327,9 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
     Remove the active class on mouseOut if mouse is down.
   */  
   mouseExited: function(evt) {
-    if (this._isMouseDown) this.set('isActive', NO);
+    if (this._isMouseDown) {
+      this.set('isActive', NO);
+    }
     return YES;
   },
 
@@ -334,7 +337,9 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
     If mouse was down and we renter the button area, set the active state again.
   */  
   mouseEntered: function(evt) {
-    this.set('isActive', this._isMouseDown);
+    if (this._isMouseDown) {
+      this.set('isActive', YES);
+    }
     return YES;
   },
 
@@ -562,12 +567,18 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
   },
   
   didAppendToDocument: function() {
-    if(SC.browser.msie===7){
-      var elem = this.$();
-      if(elem && elem[0]){
-        var w = elem[0].clientWidth,
-        padding = parseInt(elem.css('paddingRight'),0);
-        this.$('.sc-button-label').css('minWidth', w-(padding*2)+'px');
+   if(parseInt(SC.browser.msie, 0)===7){
+      var layout = this.get('layout');
+      if(this.get('useStaticLayout') && layout.width && 
+        (layout.width.indexOf && layout.width.indexOf('auto')!=-1)){
+        var elem = this.$();
+        if(elem && elem[0]){
+          var w = elem[0].clientWidth;
+          if(w!==0){
+            var padding = parseInt(elem.css('paddingRight'),0);
+            this.$('.sc-button-label').css('minWidth', w-(padding*2)+'px');
+          }
+        }
       }
     }
   }

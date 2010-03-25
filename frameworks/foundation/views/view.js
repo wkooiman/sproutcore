@@ -90,7 +90,7 @@ SC.TABBING_ONLY_INSIDE_DOCUMENT = YES;
   This will enable touch events to be routed into mouse events. 
   It is enabled by default.
 */
-SC.ROUTE_TOUCH = YES;
+SC.ROUTE_TOUCH = NO;
 
 
 /** @private - custom array used for child views */
@@ -295,6 +295,15 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     return ret ;
   }.property('parentView', 'isEnabled'),
   
+  /**
+    Observer that resigns firstResponder if the view is Disabled and is first
+    responder. This will avoid cases like disabled view with focus rings.
+  */
+  isEnabledObserver: function(){
+    if(!this.get('isEnabled') && this.get('isFirstResponder')){
+      this.resignFirstResponder();
+    } 
+  }.observes('isEnabled'),
   
   // ..........................................................
   // MULTITOUCH SUPPORT
@@ -399,7 +408,9 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
       
       // if we were firstResponder, resign firstResponder also if no longer
       // visible.
-      if (!cur && this.get('isFirstResponder')) this.resignFirstResponder();
+      if (!cur && this.get('isFirstResponder')) {
+        this.resignFirstResponder();
+      }
       
     // }
     return this ;
@@ -480,7 +491,6 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     if (view.parentView !== this) {
       throw "%@.removeChild(%@) must belong to parent".fmt(this,view);
     }
-    
     // notify views
     if (view.willRemoveFromParent) view.willRemoveFromParent() ;
     if (this.willRemoveChild) this.willRemoveChild(view) ;
@@ -766,6 +776,20 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     }
     
     return elem;
+  },
+  
+  /**
+    Returns YES if the receiver is a subview of a given view or if it’s 
+    identical to that view. Otherwise, it returns NO.
+    
+    @property {SC.View} view
+  */
+  isDescendantOf: function(view) {
+    var parentView = this.get('parentView');
+    
+    if(this===view) return YES;
+    else if(parentView) return parentView.isDescendantOf(view);
+    else return NO;
   },
   
   /**
@@ -1607,16 +1631,19 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     @type SC.View
   */
   nextValidKeyView: function() {
-    var seen = [],
-        rootView = this.pane(), ret; 
-    ret = rootView._computeNextValidKeyView(this, seen);
-    if(SC.TABBING_ONLY_IN_DOCUMENT && SC.ret === null){
+    var seen = [], 
+        rootView = this.pane(), ret = this.get('nextKeyView');
+    
+    if(!ret) ret = rootView._computeNextValidKeyView(this, seen);
+    
+    if(SC.TABBING_ONLY_INSIDE_DOCUMENT && !ret) {
       ret = rootView._computeNextValidKeyView(rootView, seen);
     }
+    
     return ret ;
   }.property('nextKeyView'),
   
-  _computeNextValidKeyView: function(currentView, seen) {  
+  _computeNextValidKeyView: function(currentView, seen) {
     var ret = this.get('nextKeyView'),
         children, i, childLen, child;
     if(this !== currentView && seen.indexOf(currentView)!=-1 && 
@@ -1628,7 +1655,7 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     // find next sibling
     if (!ret) {
       children = this.get('childViews');
-      for(i=0, childLen= children.length; i<childLen; i++){
+      for(i=0, childLen = children.length; i<childLen; i++){
         child = children[i];
         if(child.get('isVisibleInWindow') && child.get('isVisible')){
           ret = child._computeNextValidKeyView(currentView, seen);
@@ -1656,8 +1683,8 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
   */
   previousValidKeyView: function() {
     var seen = [],
-        rootView = this.pane(), ret; 
-    ret = rootView._computePreviousValidKeyView(this, seen);
+        rootView = this.pane(), ret = this.get('previousKeyView'); 
+    if(!ret) ret = rootView._computePreviousValidKeyView(this, seen);
     return ret ;
   }.property('previousKeyView'),
   
@@ -1794,8 +1821,6 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
   */
   destroy: function() {
     if (this.get('isDestroyed')) return this; // nothing to do
-     
-    sc_super();
     
     // remove from parent if found
     this.removeFromParent() ;
@@ -1806,6 +1831,9 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     
     // unregister for autoscroll during drags
     if (this.get('isScrollable')) SC.Drag.removeScrollableView(this) ;
+    
+    //Do generic destroy. It takes care of mixins and sets isDestroyed to YES.
+    sc_super();
     return this; // done with cleanup
   },
   
@@ -1828,8 +1856,6 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     delete this._CQ ; 
     delete this.page ;
     
-    // mark as destroyed so we don't do this again
-    this.set('isDestroyed', YES) ;
     return this ;
   },
   

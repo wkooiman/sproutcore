@@ -106,7 +106,42 @@ SC.RootResponder = SC.Object.extend({
     this.endPropertyChanges() ;
     return this ;
   }, 
-  
+
+  // ..........................................................
+  // MENU PANE
+  //
+
+  /**
+    The current menu pane. This pane receives keyboard events before all other
+    panes, but tends to be transient, as it is only set when a pane is open.
+
+    @property {SC.MenuPane}
+  */
+  menuPane: null,
+
+  /**
+    Sets a pane as the menu pane. All key events will be directed to this
+    pane, but the current key pane will not lose focus.
+
+    @param {SC.MenuPane} pane
+    @returns {SC.RootResponder} receiver
+  */
+  makeMenuPane: function(pane) {
+    // Does the specified pane accept being the menu pane?  If not, there's
+    // nothing to do.
+    if (pane  &&  !pane.get('acceptsMenuPane')) {
+      return this;
+    }
+    else {
+      var currentMenu = this.get('menuPane');
+      if (currentMenu === pane) return this; // nothing to do
+
+      this.set('menuPane', pane);
+    }
+
+    return this;
+  },
+
   // .......................................................
   // KEY ROOT VIEW
   // 
@@ -259,7 +294,7 @@ SC.RootResponder = SC.Object.extend({
       target = target.get('firstResponder') || target;
       do {
         if (target.respondsTo(methodName)) return target ;
-      } while (target = target.get('nextResponder')) ;
+      } while ((target = target.get('nextResponder'))) ;
     }
 
     // HACK: Eventually we need to normalize the sendAction() method between
@@ -381,12 +416,12 @@ SC.RootResponder = SC.Object.extend({
   */
   sendEvent: function(action, evt, target) {
     var pane, ret ;
-     
+
     SC.RunLoop.begin() ;
     
     // get the target pane
     if (target) pane = target.get('pane') ;
-    else pane = this.get('keyPane') || this.get('mainPane') ;
+    else pane = this.get('menuPane') || this.get('keyPane') || this.get('mainPane') ;
     
     // if we found a valid pane, send the event to it
     ret = (pane) ? pane.sendEvent(action, evt, target) : null ;

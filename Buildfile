@@ -31,10 +31,12 @@ config :runtime,    :required => []
 config :foundation, :required => [:runtime]
 config :datastore,  :required => [:runtime]
 
+
 # APP-LEVEL FRAMEWORKS
-%w(desktop mobile designer).each do |app_framework|
-  config app_framework, :required => [:runtime, :datastore, :foundation],
-		:test_required => ["sproutcore/testing", :empty_theme]
+%w(desktop mobile designer media).each do |app_framework|
+  config app_framework, 
+    :required => [:runtime, :datastore, :foundation],
+    :test_required => ["sproutcore/testing", :empty_theme]
 end
 
 config :mobile, 

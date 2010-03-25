@@ -458,21 +458,24 @@ SC.RootResponder = SC.RootResponder.extend(
     trigger a keyDown.
   */
   keypress: function(evt) {
-    var ret ;
+    var ret,
+        keyCode   = evt.keyCode,
+        isFirefox = !!SC.browser.mozilla;
     
     // delete is handled in keydown() for most browsers
-    if (SC.browser.mozilla && (evt.which === 8)) {
+    if (isFirefox && (evt.which === 8)) {
       //get the keycode and set it for which.
-      evt.which=evt.keyCode;
+      evt.which = keyCode;
       ret = this.sendEvent('keyDown', evt);
       return ret ? (SC.allowsBackspaceToPreviousPage || evt.hasCustomEventHandling) : YES ;
 
     // normal processing.  send keyDown for printable keys... 
     //there is a special case for arrow key repeating of events in FF.
     } else {
-      var isFirefoxArrowKeys = (evt.keyCode>=37 && evt.keyCode<=40 && SC.browser.mozilla);
-      if ((evt.charCode !== undefined && evt.charCode === 0) && !isFirefoxArrowKeys) return YES;
-      if (isFirefoxArrowKeys) evt.which=evt.keyCode;
+      var isFirefoxArrowKeys = (keyCode >= 37 && keyCode <= 40 && isFirefox),
+          charCode           = evt.charCode;
+      if ((charCode !== undefined && charCode === 0) && !isFirefoxArrowKeys) return YES;
+      if (isFirefoxArrowKeys) evt.which = keyCode;
       return this.sendEvent('keyDown', evt) ? evt.hasCustomEventHandling:YES;
     }
   },
@@ -532,6 +535,7 @@ SC.RootResponder = SC.RootResponder.extend(
         this.focus();
       }
 
+      evt.target.focus();
       // First, save the click count. The click count resets if the mouse down
       // event occurs more than 200 ms later than the mouse up event or more
       // than 8 pixels away from the mouse down event.
@@ -539,9 +543,9 @@ SC.RootResponder = SC.RootResponder.extend(
       if (!this._lastMouseUpAt || ((Date.now()-this._lastMouseUpAt) > 200)) {
         this._clickCount = 1 ;
       } else {
-        var deltaX = this._lastMouseDownX - evt.clientX ;
-        var deltaY = this._lastMouseDownY - evt.clientY ;
-        var distance = Math.sqrt(deltaX*deltaX + deltaY*deltaY) ;
+        var deltaX = this._lastMouseDownX - evt.clientX,
+            deltaY = this._lastMouseDownY - evt.clientY,
+            distance = Math.sqrt(deltaX*deltaX + deltaY*deltaY) ;
         if (distance > 8.0) this._clickCount = 1 ;
       }
       evt.clickCount = this._clickCount ;
@@ -747,8 +751,8 @@ SC.RootResponder = SC.RootResponder.extend(
   _mouseCanDrag: YES,
   
   selectstart: function(evt) { 
-    var targetView = this.targetViewForEvent(evt);
-    var result = this.sendEvent('selectStart', evt, targetView);
+    var targetView = this.targetViewForEvent(evt),
+        result = this.sendEvent('selectStart', evt, targetView);
     
     // If the target view implements mouseDragged, then we want to ignore the
     // 'selectstart' event.
