@@ -523,19 +523,7 @@ SC.RootResponder = SC.RootResponder.extend(
   
   mousedown: function(evt) {
     try {
-      // make sure the window gets focus no matter what.  FF is inconsistant 
-      // about this. You have to regain focus on the window for the key events
-      // to get triggered. This happens when we don't let the browser trigger
-      // the default action and we have something in the app like an iframe.
-      //
-      // However, doing this causes all sorts of bogus activate/deactivate
-      // events in Internet Explorer
-      if (SC.browser.mozilla) {
-        window.focus();
-        this.focus();
-      }
-
-      evt.target.focus();
+      window.focus();
       // First, save the click count. The click count resets if the mouse down
       // event occurs more than 200 ms later than the mouse up event or more
       // than 8 pixels away from the mouse down event.
