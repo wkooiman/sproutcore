@@ -24,7 +24,7 @@ sc_require('mixins/border');
   @since SproutCore 1.0
 */
 SC.ScrollView = SC.View.extend(SC.Border, {
-
+  /** @scope SC.ScrollView.prototype */
   classNames: ['sc-scroll-view'],
   
   // ..........................................................
