@@ -494,12 +494,21 @@ SC.RootResponder = SC.Object.extend({
     
     This is useful for implementing scaling.
   */
-  averagedTouchesForView: function(view) {
+  averagedTouchesForView: function(view, added) {
     var t = this.touchesForView(view);
-    if (!t || t.length === 0) return {x: 0, y: 0, d: 0, touchCount: 0};
+    if ((!t || t.length === 0) && !added) return {x: 0, y: 0, d: 0, touchCount: 0};
     
-    var touches = t.toArray(), idx, len = touches.length, touch,
-        ax = 0, ay = 0, dx, dy, ad;
+    // make array of touches
+    var touches;
+    if (t) touches = t.toArray();
+    else touches = [];
+    
+    // add added if needed
+    if (added) touches.push(added);
+    
+    // prepare variables for looping
+    var idx, len = touches.length, touch,
+        ax = 0, ay = 0, dx, dy, ad = 0;
     
     // first, add
     for (idx = 0; idx < len; idx++) {
@@ -843,7 +852,7 @@ SC.RootResponder = SC.Object.extend({
       var touches = evt.changedTouches, touch, touchEntry,
           idx, len = touches.length, 
           view, 
-          action = evt.isCancel ? "touchCancelled" : "touchEnd",
+          action = evt.isCancel ? "touchCancelled" : "touchEnd", a,
           responderIdx, responders, responder;
       
       for (idx = 0; idx < len; idx++) {
@@ -862,15 +871,15 @@ SC.RootResponder = SC.Object.extend({
           responders = touchEntry.touchResponders;
           responderIdx = responders.length - 1;
           responder = responders[responderIdx];
-          
+          a = action;
           while (responder) {
             // tell it
-            responder.tryToPerform(action, touchEntry, evt);
+            responder.tryToPerform(a, touchEntry, evt);
             
             // next
             responderIdx--;
             responder = responders[responderIdx];
-            action = "touchCancelled"; // any further ones receive cancelled
+            a = "touchCancelled"; // any further ones receive cancelled
           }
         }
         
@@ -975,27 +984,7 @@ SC.Touch.prototype = {
     you use it from anywhere else, it will make this touch be used twice--so use caution.
   */
   averagedTouchesForView: function(view, addSelf) {
-    var ret = this.touchContext.averagedTouchesForView(view);
-    if (addSelf) {
-      // reaverage x
-      ret.x *= ret.touchCount;
-      ret.y *= ret.touchCount;
-      ret.x += this.pageX;
-      ret.y += this.pageY;
-      ret.x /= ret.touchCount + 1;
-      ret.y /= ret.touchCount + 1;
-    
-      // reaverage distance
-      ret.d *= ret.touchCount;
-      ret.d += Math.pow(Math.pow(Math.abs(this.pageX - ret.x), 2), Math.pow(Math.abs(this.pageY - ret.y), 2), 0.5);
-      ret.d /= ret.touchCount + 1;
-    
-      // update touch count
-      ret.touchCount += 1;
-    }
-    
-    // return
-    return ret;
+    return this.touchContext.averagedTouchesForView(view, (addSelf ? this : null));
   }
 };
 

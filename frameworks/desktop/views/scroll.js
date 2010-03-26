@@ -59,7 +59,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
 
     return this._scroll_verticalScrollOffset||0;
   }.property().cacheable(),
-
+  
   /**
     The maximum horizontal scroll offset allowed given the current contentView 
     size and the size of the scroll view.  If horizontal scrolling is 
@@ -639,12 +639,63 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     }
   },
   
+  /*..............................................
+    SCALING SUPPORT
+  */
   
+  /**
+    Determines whether scaling is allowed.
+  */
+  canScale: NO,
+  
+  /**
+    The current scale.
+  */
+  _scale: 1.0,
+  scale: function(key, value) {
+    if (value !== undefined) {
+      this._scale = Math.min(Math.max(this.get("minimumScale"), value), this.get("maximumScale"));
+    }
+    return this._scale;
+  }.property().cacheable(),
+  
+  /**
+    The minimum scale.
+  */
+  minimumScale: 0.25,
+  
+  /**
+    The maximum scale.
+  */
+  maximumScale: 2.0,
+  
+  /**
+    Whether to automatically determine the scale range based on the size of the content.
+  */
+  autoScaleRange: NO,
+  
+  _scale_css: "",
+  
+  updateScale: function(scale) {
+    if (this.get("content").isScalable) {
+      this.get("content").updateScale(scale);
+    } else {
+      this._scale_css = "scale3d(" + scale + ", " + scale + ", 1)";
+    }
+  },
   
   /*..............................................
     TOUCH SUPPORT
   */
   acceptsMultitouch: YES,
+  
+  _applyCSSTransforms: function(layer) {
+    var transform = "";
+    transform += 'translate3d('+ -this._scroll_horizontalScrollOffset +'px, '+ -this._scroll_verticalScrollOffset+'px, 0)';
+    transform += "scale3d(" + this._scale + ", " + this._scale + ",1) ";
+    layer.style.webkitTransform = transform;
+    layer.style.webkitTransformOrigin = "top left";
+  },
   
   captureTouch: function(touch) {
     return YES;
@@ -684,14 +735,33 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     if (this.touch && this.touch.timeout) {
       // first, finish up the hack to boost deceleration
       SC.RunLoop.begin();
-      this.set("verticalScrollOffset", this._scroll_verticalScrollOffset);
-      this.set("horizontalScrollOffset", this._scroll_horizontalScrollOffset);
+      this.set("scale", this._scale);
+      this.set("verticalScrollOffset", verticalScrollOffset);
+      this.set("horizontalScrollOffset", horizontalScrollOffset);
       SC.RunLoop.end();
       
       // now clear the timeout
       clearTimeout(this.touch.timeout);
       this.touch.timeout = null;
     }
+    
+    // calculate container+content width/height
+    var view = this.get('contentView') ;
+    var contentWidth = view ? view.get('frame').width : 0,
+        contentHeight = view ? view.get('frame').height : 0;
+    
+    if(view.calculatedWidth && view.calculatedWidth!==0) contentWidth = view.calculatedWidth;
+    if (view.calculatedHeight && view.calculatedHeight !==0) contentHeight = view.calculatedHeight;
+    
+    var containerWidth = this.get('containerView').get('frame').width,
+        containerHeight = this.get('containerView').get('frame').height;
+    
+
+    // calculate position in content
+    var globalFrame = this.convertFrameToView(this.get("frame"), null),
+        positionInContentX = horizontalScrollOffset + (avg.x - globalFrame.x) / this._scale,
+        positionInContentY = verticalScrollOffset + (avg.y - globalFrame.y) / this._scale;
+    
     
     this.touch = {
       startTime: touch.timeStamp,
@@ -701,18 +771,27 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       scrolling: { x: NO, y: NO },
       
       // offsets and velocities
-      startScrollOffset: { x: horizontalScrollOffset, y: verticalScrollOffset },
+      // startScrollOffset: { x: horizontalScrollOffset, y: verticalScrollOffset },
       lastScrollOffset: { x: horizontalScrollOffset, y: verticalScrollOffset },
       startTouchOffset: { x: avg.x, y: avg.y },
       scrollVelocity: { x: 0, y: 0 },
       
+      startTouchOffsetInContent: { x: positionInContentX, y: positionInContentY },
+      
+      containerSize: { width: containerWidth, height: containerHeight },
+      contentSize: { width: contentWidth, height: contentHeight },
+      
+      startScale: this._scale,
+      startDistance: avg.d,
+      canScale: this.get("canScale"),
+      minimumScale: this.get("minimumScale"),
+      maximumScale: this.get("maximumScale"),
+      
+      globalFrame: globalFrame,
+      
       // cache some things
       layer: this.get("contentView").get('layer'),
-      maximumScroll: {
-        x: this.get('maximumHorizontalScrollOffset'),
-        y: this.get('maximumVerticalScrollOffset')
-      },
-      
+
       // some constants
       resistanceCoefficient: 0.998,
       resistanceAsymptote: 320,
@@ -721,6 +800,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       
       // how much percent of the other drag direction you must drag to start dragging that direction too.
       scrollTolerance: { x: 5, y: 5 },
+      scaleTolerance: 5,
       secondaryScrollTolerance: 20,
       scrollLock: 100,
 
@@ -735,11 +815,11 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     this.dragging = NO;
   },
   
-  _adjustForEdgeResistance: function(offset, maxOffset, resistanceCoefficient, asymptote) {
+  _adjustForEdgeResistance: function(offset, minOffset, maxOffset, resistanceCoefficient, asymptote) {
     var distanceFromEdge;
     
     // find distance from edge
-    if (offset < 0) distanceFromEdge = offset;
+    if (offset < minOffset) distanceFromEdge = offset - minOffset;
     else if (offset > maxOffset) distanceFromEdge = maxOffset - offset;
     else return offset;
     
@@ -747,29 +827,35 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     distanceFromEdge = Math.pow(resistanceCoefficient, Math.abs(distanceFromEdge)) * asymptote;
     
     // adjust mathematically
-    if (offset < 0) distanceFromEdge = distanceFromEdge - asymptote;
+    if (offset < minOffset) distanceFromEdge = distanceFromEdge - asymptote;
     else distanceFromEdge = -distanceFromEdge + asymptote;
     
     // generate final value
-    return Math.min(Math.max(0, offset), maxOffset) + distanceFromEdge;
+    return Math.min(Math.max(minOffset, offset), maxOffset) + distanceFromEdge;
   },
   
   touchesDragged: function(evt, touches) {
     var avg = evt.averagedTouchesForView(this);
-    this.updateTouchScroll(avg.x, avg.y, evt.timeStamp);
+    this.updateTouchScroll(avg.x, avg.y, avg.d, evt.timeStamp);
   },
   
-  updateTouchScroll: function(touchX, touchY, timeStamp) {
+  updateTouchScroll: function(touchX, touchY, distance, timeStamp) {
     // get some vars
     var touch = this.touch,
-        offsetY = touch.startScrollOffset.y,
-        maxOffsetY = touch.maximumScroll.y,
-        offsetX = touch.startScrollOffset.x,
-        maxOffsetX = touch.maximumScroll.x;
-
+        touchXInFrame = touchX - touch.globalFrame.x,
+        touchYInFrame = touchY - touch.globalFrame.y,
+        offsetY,
+        maxOffsetY,
+        offsetX,
+        maxOffsetX;
+        
+    // calculate new position in content
+    var positionInContentX = (this._scroll_horizontalScrollOffset||0) + (touchX - touch.globalFrame.x) / this._scale,
+        positionInContentY = (this._scroll_verticalScrollOffset||0) + (touchY - touch.globalFrame.y) / this._scale;
+    
     // calculate deltas
-    var deltaY = touchY - touch.startTouchOffset.y,
-        deltaX = touchX - touch.startTouchOffset.x;
+    var deltaY = positionInContentX - touch.startTouchOffset.y,
+        deltaX = positionInContentY - touch.startTouchOffset.x;
     
     if (!touch.scrolling.x && Math.abs(deltaX) > touch.scrollTolerance.x && touch.enableScrolling.x) {
       // say we are scrolling
@@ -793,25 +879,46 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     }
     
     // calculate new offset
-    if (!touch.scrolling.x && !touch.scrolling.y) return;
+    if (!touch.scrolling.x && !touch.scrolling.y && !touch.canScale) return;
     if (touch.scrolling.x) {
-      offsetX = offsetX - deltaX;
       touch.scrollTolerance.y = touch.secondaryScrollTolerance;
       if (deltaX > touch.scrollLock && !touch.scrolling.y) touch.enableScrolling.y = NO;
     }
     if (touch.scrolling.y) {
-      offsetY = offsetY - deltaY;
       touch.scrollTolerance.x = touch.secondaryScrollTolerance;
       if (deltaY > touch.scrollLock && !touch.scrolling.x) touch.enableScrolling.x = NO;
     }
     
+    // handle scaling
+    if (touch.canScale) {
+      var startDistance = touch.startDistance, dd = distance - startDistance;
+      if (Math.abs(dd) > touch.scaleTolerance) {
+      
+        var scale = touch.startScale * (1 + (dd / 100));
+
+        var newScale = this._adjustForEdgeResistance(scale, touch.minimumScale, touch.maximumScale, touch.resistanceCoefficient, touch.resistanceAsymptote);
+        this.dragging = YES;
+        this._scale = newScale;
+        var newPositionInContentX = positionInContentX * this._scale,
+            newPositionInContentY = positionInContentY * this._scale;
+      }
+    }
+    
+    maxOffsetX = Math.max(0, touch.contentSize.width * this._scale - touch.containerSize.width);
+    maxOffsetY = Math.max(0, touch.contentSize.height * this._scale - touch.containerSize.height);
+    
+    // (offsetY + touchYInFrame) / this._scale = touch.startTouchOffsetInContent.y
+    // offsetY + touchYInFrame = touch.startTouchOffsetInContent.y * this._scale;
+    // offsetY = touch.startTouchOffset * this._scale - touchYInFrame
+    offsetX = touch.startTouchOffsetInContent.x * this._scale - touchXInFrame;
+    offsetY = touch.startTouchOffsetInContent.y * this._scale - touchYInFrame;
+    
     
     // update immediately, without consulting anyone else.
-    this._scroll_verticalScrollOffset = this._adjustForEdgeResistance(offsetY, maxOffsetY, touch.resistanceCoefficient, touch.resistanceAsymptote);
-    this._scroll_horizontalScrollOffset = this._adjustForEdgeResistance(offsetX, maxOffsetX, touch.resistanceCoefficient, touch.resistanceAsymptote);
+    this._scroll_verticalScrollOffset = this._adjustForEdgeResistance(offsetY, 0, maxOffsetY, touch.resistanceCoefficient, touch.resistanceAsymptote);
+    this._scroll_horizontalScrollOffset = this._adjustForEdgeResistance(offsetX, 0, maxOffsetX, touch.resistanceCoefficient, touch.resistanceAsymptote);
     
-    var transform = 'translate3d('+ -this._scroll_horizontalScrollOffset +'px, '+ -this._scroll_verticalScrollOffset+'px, 0)';
-    touch.layer.style.webkitTransform = transform;
+    this._applyCSSTransforms(touch.layer);
     
     if (timeStamp - touch.lastEventTime >= 1 || touch.notCalculated) {
       touch.notCalculated = NO;
@@ -833,13 +940,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     if (avg.touchCount > 0) {
       this.beginTouchTracking(touch, NO);
     } else {
-      this.tracking = NO;
-      this.dragging = NO;
-      if (
-          touchStatus.dragging || 
-          Math.abs(touch.pageY - touchStatus.startTouchOffset.y) > 2 || 
-          Math.abs(touch.pageX - touchStatus.startTouchOffset.x) > 2
-      ) {
+      if (this.dragging) {
         touchStatus.dragging = NO;
 
         // reset last event time
@@ -881,8 +982,8 @@ SC.ScrollView = SC.View.extend(SC.Border, {
   */
   bouncyBounce: function(velocity, value, minValue, maxValue, de, ac) {
     if (value < minValue) {
-      if (velocity < 0) velocity = velocity + (-value * de);
-      else velocity = -value * ac;
+      if (velocity < 0) velocity = velocity + ((minValue - value) * de);
+      else velocity = (minValue-value) * ac;
     } else if (value > maxValue) {
       if (velocity > 0) velocity = velocity - ((value - maxValue) * de);
       else velocity = -((value - maxValue) * ac);
@@ -892,18 +993,27 @@ SC.ScrollView = SC.View.extend(SC.Border, {
 
   decelerateAnimation: function() {
     var touch = this.touch,
-        maxOffsetX = touch.maximumScroll.x,
-        maxOffsetY = touch.maximumScroll.y,
+        scale = this._scale,
+        maxOffsetX = Math.max(0, touch.contentSize.width * scale - touch.containerSize.width),
+        maxOffsetY = Math.max(0, touch.contentSize.height * scale - touch.containerSize.height),
         newX = this._scroll_horizontalScrollOffset + touch.decelerationVelocity.x,
         newY = this._scroll_verticalScrollOffset + touch.decelerationVelocity.y,
         now = Date.now(),
         t = Math.max(now - touch.lastEventTime, 1);
+    
+    var de = touch.decelerationFromEdge, ac = touch.accelerationToEdge;
 
     // update scroll
     this._scroll_horizontalScrollOffset = newX;
     this._scroll_verticalScrollOffset = newY;
-    var transform = 'translate3d(' + -newX + 'px, ' + -newY + 'px, 0)';
-    this.get("contentView").get('layer').style.webkitTransform = transform;
+    
+    
+    // handle scale being out-of-range
+    var sv = 0;
+    sv = this.bouncyBounce(sv, scale, touch.minimumScale, touch.maximumScale, de, ac);
+    this._scale = scale = scale + sv;
+    
+    this._applyCSSTransforms(touch.layer);
     
     // apply decay
     var decay = 0.950;
@@ -911,17 +1021,17 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     touch.decelerationVelocity.x *= Math.pow(decay, (t / 10));
     
     // adjust for bouncing
-    var de = touch.decelerationFromEdge, ac = touch.accelerationToEdge;
     touch.decelerationVelocity.x = this.bouncyBounce(touch.decelerationVelocity.x, newX, 0, maxOffsetX, de, ac);
     touch.decelerationVelocity.y = this.bouncyBounce(touch.decelerationVelocity.y, newY, 0, maxOffsetY, de, ac);
  
     // if we ain't got no velocity... then we must be finished
     var absXVelocity = Math.abs(touch.decelerationVelocity.x);
     var absYVelocity = Math.abs(touch.decelerationVelocity.y);
-    if (absYVelocity < 0.01 && absXVelocity < 0.01) {
+    if (absYVelocity < 0.01 && absXVelocity < 0.01 && Math.abs(sv) < 0.01) {
       touch.timeout = null;
       
       SC.RunLoop.begin();
+      this.set("scale", this._scale);
       this.set("verticalScrollOffset", this._scroll_verticalScrollOffset);
       this.set("horizontalScrollOffset", this._scroll_horizontalScrollOffset);
       SC.RunLoop.end();
@@ -1155,8 +1265,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
 
       // Use accelerated drawing if the browser supports it
       if (SC.browser.touch) {
-        var transform = 'translate3d('+ -horizontalScrollOffset+'px, '+ -verticalScrollOffset+'px, 0)';
-        content.get('layer').style.webkitTransform = transform;
+        this._applyCSSTransforms(content.get('layer'));
       }
     }
 
