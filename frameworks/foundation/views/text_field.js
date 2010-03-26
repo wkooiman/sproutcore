@@ -830,7 +830,7 @@ SC.TextFieldView = SC.FieldView.extend(SC.StaticLayout, SC.Editable,
       evt.stop();
       return YES;
     } else if((this.value && this.value.length===0) || !this.value) {
-      if(parseInt(SC.browser.msie,0)<8){
+      if(SC.browser.msie){
         this.invokeLater(this.focusIE7, 1);
       } else {
         this.$input()[0].focus();
