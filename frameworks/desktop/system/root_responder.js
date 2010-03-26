@@ -524,7 +524,6 @@ SC.RootResponder = SC.RootResponder.extend(
   
   mousedown: function(evt) {
     try {
-
       window.focus();
       // First, save the click count. The click count resets if the mouse down
       // event occurs more than 200 ms later than the mouse up event or more
