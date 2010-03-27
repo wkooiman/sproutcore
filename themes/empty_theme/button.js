@@ -129,7 +129,7 @@ SC.EmptyTheme.renderers.Button = SC.Renderer.extend({
     this._controlRenderer.attachLayer(layer);
   },
   
-  didDetachLayer: function() {
+  willDetachLayer: function() {
     this._titleRenderer.detachLayer();
     this._controlRenderer.detachLayer();
   }
