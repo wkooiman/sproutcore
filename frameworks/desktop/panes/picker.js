@@ -156,13 +156,6 @@ SC.PickerPane = SC.PalettePane.extend({
   pointerOffset: null,
 
   /**
-    default offset of extra-right pointer for picker-pointer or pointer-menu
-
-    @property Number
-  */
-  extraRightOffset: 0,
-
-  /**
     Displays a new picker pane according to the passed parameters.
     Every parameter except for the anchorViewOrElement is optional.
   
@@ -270,7 +263,7 @@ SC.PickerPane = SC.PalettePane.extend({
         case SC.PICKER_POINTER:
         case SC.PICKER_MENU_POINTER:
           // apply pointer re-position rule
-          this.setupPointer(anchor);
+          this.setupPointer();
           picker = this.fitPositionToScreenPointer(wret, picker, anchor) ;
           break;
           
@@ -382,8 +375,13 @@ SC.PickerPane = SC.PalettePane.extend({
     re-position rule for triangle pointer picker.
   */
   fitPositionToScreenPointer: function(w, f, a) {
-    var offset = [this.pointerOffset[0], this.pointerOffset[1],
-                  this.pointerOffset[2], this.pointerOffset[3]];
+    var overlapTunningX = (a.height > 12) ? 0 : 1;
+    var overlapTunningY = (a.height > 12) ? 0 : 3;
+
+    var offset = [this.pointerOffset[0]+overlapTunningX,
+                  this.pointerOffset[1]-overlapTunningX,
+                  this.pointerOffset[2]-overlapTunningY,
+                  this.pointerOffset[3]+overlapTunningY];
 
     // initiate perfect positions matrix
     // 4 perfect positions: right > left > top > bottom
@@ -472,42 +470,29 @@ SC.PickerPane = SC.PalettePane.extend({
     This method will set up pointerOffset and preferMatrix according to type
     and size if not provided excplicitly.
   */
-  setupPointer: function(a) {
+  setupPointer: function() {
     // set up pointerOffset according to type and size if not provided excplicitly
     if(!this.pointerOffset || this.pointerOffset.length !== 4) {
       if(this.get('preferType') == SC.PICKER_MENU_POINTER) {
         switch (this.get('controlSize')) {
           case SC.TINY_CONTROL_SIZE:
             this.set('pointerOffset', SC.PickerPane.TINY_PICKER_MENU_POINTER_OFFSET) ;
-            this.set('extraRightOffset', SC.PickerPane.TINY_PICKER_MENU_EXTRA_RIGHT_OFFSET) ;
             break;
           case SC.SMALL_CONTROL_SIZE:
             this.set('pointerOffset', SC.PickerPane.SMALL_PICKER_MENU_POINTER_OFFSET) ;
-            this.set('extraRightOffset', SC.PickerPane.SMALL_PICKER_MENU_EXTRA_RIGHT_OFFSET) ;
             break;
           case SC.REGULAR_CONTROL_SIZE:
             this.set('pointerOffset', SC.PickerPane.REGULAR_PICKER_MENU_POINTER_OFFSET) ;
-            this.set('extraRightOffset', SC.PickerPane.REGULAR_PICKER_MENU_EXTRA_RIGHT_OFFSET) ;
             break;
           case SC.LARGE_CONTROL_SIZE:
             this.set('pointerOffset', SC.PickerPane.LARGE_PICKER_MENU_POINTER_OFFSET) ;
-            this.set('extraRightOffset', SC.PickerPane.LARGE_PICKER_MENU_EXTRA_RIGHT_OFFSET) ;
             break;
           case SC.HUGE_CONTROL_SIZE:
             this.set('pointerOffset', SC.PickerPane.HUGE_PICKER_MENU_POINTER_OFFSET) ;
-            this.set('extraRightOffset', SC.PickerPane.HUGE_PICKER_MENU_EXTRA_RIGHT_OFFSET) ;
             break;
         }
       } else {
-        var overlapTunningX = (a.width < 16) ? ((a.width < 4) ? 9 : 6) : 0;
-        var overlapTunningY = (a.height < 16) ? ((a.height < 4) ? 9 : 6) : 0;
-
-        var offset = [SC.PickerPane.PICKER_POINTER_OFFSET[0]+overlapTunningX,
-                      SC.PickerPane.PICKER_POINTER_OFFSET[1]-overlapTunningX,
-                      SC.PickerPane.PICKER_POINTER_OFFSET[2]-overlapTunningY,
-                      SC.PickerPane.PICKER_POINTER_OFFSET[3]+overlapTunningY];
-        this.set('pointerOffset', offset) ;
-        this.set('extraRightOffset', SC.PickerPane.PICKER_EXTRA_RIGHT_OFFSET) ;
+        this.set('pointerOffset', SC.PickerPane.PICKER_POINTER_OFFSET) ;
       }
     }
 
@@ -578,19 +563,13 @@ SC.PickerPane = SC.PalettePane.extend({
   Default metrics for the different control sizes.
 */
 SC.PickerPane.PICKER_POINTER_OFFSET = [9, -9, -18, 18];
-SC.PickerPane.PICKER_EXTRA_RIGHT_OFFSET = 20;
 
 SC.PickerPane.TINY_PICKER_MENU_POINTER_OFFSET = [9, -9, -18, 18];
-SC.PickerPane.TINY_PICKER_MENU_EXTRA_RIGHT_OFFSET = 12;
 
 SC.PickerPane.SMALL_PICKER_MENU_POINTER_OFFSET = [9, -9, -8, 8];
-SC.PickerPane.SMALL_PICKER_MENU_EXTRA_RIGHT_OFFSET = 11;
 
 SC.PickerPane.REGULAR_PICKER_MENU_POINTER_OFFSET = [9, -9, -12, 12];
-SC.PickerPane.REGULAR_PICKER_MENU_EXTRA_RIGHT_OFFSET = 13;
 
 SC.PickerPane.LARGE_PICKER_MENU_POINTER_OFFSET = [9, -9, -16, 16];
-SC.PickerPane.LARGE_PICKER_MENU_EXTRA_RIGHT_OFFSET = 17;
 
 SC.PickerPane.HUGE_PICKER_MENU_POINTER_OFFSET = [9, -9, -18, 18];
-SC.PickerPane.HUGE_PICKER_MENU_EXTRA_RIGHT_OFFSET = 12;
