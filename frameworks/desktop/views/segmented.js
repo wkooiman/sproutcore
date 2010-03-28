@@ -43,7 +43,7 @@ SC.SegmentedView = SC.View.extend(SC.Control,
   
   classNames: ['sc-segmented-view'],
   
-  theme: 'square',
+  controlStyle: 'square',
   
   /**
     The value of the segmented view.
