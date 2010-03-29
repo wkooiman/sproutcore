@@ -430,7 +430,7 @@ SC.RootResponder = SC.Object.extend({
   setup: function() {
     this.listenFor('touchstart touchmove touchend touchcancel'.w(), document);
     
-    if (SC.browser.touch) {
+    if (NO && SC.browser.touch) {
       var elem = document.createElement('div');
       elem.id = 'sc-touch-intercept';
       elem.style.position = 'absolute';
@@ -728,6 +728,7 @@ SC.RootResponder = SC.Object.extend({
     @returns {Boolean}
   */
   touchstart: function(evt) {
+    SC.RunLoop.begin();
     try {
       // loop through changed touches, calling touchStart, etc.
       var idx, touches = evt.changedTouches, len = touches.length, target, view, touch, touchEntry;
@@ -761,11 +762,11 @@ SC.RootResponder = SC.Object.extend({
       }
     } catch (e) {
       SC.Logger.warn('Exception during touchStart: %@'.fmt(e)) ;
-      this._touchViews = null ;
       SC.RunLoop.end();
       return NO ;
     }
 
+    SC.RunLoop.end();
     return NO;
   },
 
@@ -922,8 +923,8 @@ SC.Touch = function(touch, touchContext) {
   // get the raw target view (we'll refine later)
   this.touchContext = touchContext;
   this.identifier = touch.identifier; // for now, our internal id is WebKit's id.
-  this.targetView = touch.targetNode ? SC.$(touch.targetNode).view()[0] : null;
-  this.target = touch.targetNode;
+  this.targetView = touch.target ? SC.$(touch.target).view()[0] : null;
+  this.target = touch.target;
   
   this.view = undefined;
   this.touchResponder = this.nextTouchResponder = undefined;

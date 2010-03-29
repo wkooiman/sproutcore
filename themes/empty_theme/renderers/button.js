@@ -72,7 +72,6 @@ SC.EmptyTheme.renderers.Button = SC.Renderer.extend({
     theme = this.oldButtonTheme;
     if (theme) context.addClass(theme);
     
-    
     this.renderContents(context);
   },
   
@@ -109,8 +108,7 @@ SC.EmptyTheme.renderers.Button = SC.Renderer.extend({
     });
     
     // do actual updating
-    this._controlRenderer.update();
-    
+    this._controlRenderer.update();    
     var classes, theme, q = this.$();
     
     classes = this._TEMPORARY_CLASS_HASH ? this._TEMPORARY_CLASS_HASH : this._TEMPORARY_CLASS_HASH = {};

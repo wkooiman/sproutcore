@@ -691,7 +691,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
   
   _applyCSSTransforms: function(layer) {
     var transform = "";
-    transform += 'translate3d('+ -this._scroll_horizontalScrollOffset +'px, '+ -this._scroll_verticalScrollOffset+'px, 0)';
+    transform += 'translate3d('+ -this._scroll_horizontalScrollOffset +'px, '+ -this._scroll_verticalScrollOffset+'px,0)';
     transform += "scale3d(" + this._scale + ", " + this._scale + ",1) ";
     layer.style.webkitTransform = transform;
     layer.style.webkitTransformOrigin = "top left";
