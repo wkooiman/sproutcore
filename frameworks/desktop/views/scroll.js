@@ -77,7 +77,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     if(view.calculatedWidth && view.calculatedWidth!==0){
       contentWidth = view.calculatedWidth; 
     }
-    contentWidth *= this.get("scale");
+    contentWidth *= this._scale;
     
     var containerWidth = this.get('containerView').get('frame').width ;
     return Math.max(0, contentWidth-containerWidth) ;
@@ -100,7 +100,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     if(view.calculatedHeight && view.calculatedHeight!==0){
       contentHeight = view.calculatedHeight; 
     }
-    contentHeight *= this.get("scale");
+    contentHeight *= this._scale;
     
     var containerHeight = this.get('containerView').get('frame').height ;
     return Math.max(0, contentHeight-containerHeight) ;
@@ -800,7 +800,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       resistanceCoefficient: 0.998,
       resistanceAsymptote: 320,
       decelerationFromEdge: 0.05,
-      accelerationToEdge: 0.08,
+      accelerationToEdge: 0.1,
       
       // how much percent of the other drag direction you must drag to start dragging that direction too.
       scrollTolerance: { x: 5, y: 5 },
@@ -815,8 +815,10 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       touch: touch
     };
 
-    this.tracking = YES;
-    this.dragging = NO;
+    if (starting) {
+      this.tracking = YES;
+      this.dragging = NO;
+    }
   },
   
   _adjustForEdgeResistance: function(offset, minOffset, maxOffset, resistanceCoefficient, asymptote) {
@@ -884,12 +886,10 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     
     // calculate new offset
     if (!touch.scrolling.x && !touch.scrolling.y && !touch.canScale) return;
-    if (touch.scrolling.x) {
-      touch.scrollTolerance.y = touch.secondaryScrollTolerance;
+    if (touch.scrolling.x && !touch.scrolling.y) {
       if (deltaX > touch.scrollLock && !touch.scrolling.y) touch.enableScrolling.y = NO;
     }
-    if (touch.scrolling.y) {
-      touch.scrollTolerance.x = touch.secondaryScrollTolerance;
+    if (touch.scrolling.y && !touch.scrolling.x) {
       if (deltaY > touch.scrollLock && !touch.scrolling.x) touch.enableScrolling.x = NO;
     }
     
@@ -898,7 +898,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       var startDistance = touch.startDistance, dd = distance - startDistance;
       if (Math.abs(dd) > touch.scaleTolerance) {
       
-        var scale = touch.startScale * (1 + (dd / 100));
+        var scale = touch.startScale * (1 + (dd / 200));
 
         var newScale = this._adjustForEdgeResistance(scale, touch.minimumScale, touch.maximumScale, touch.resistanceCoefficient, touch.resistanceAsymptote);
         this.dragging = YES;
@@ -919,8 +919,11 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     
     
     // update immediately, without consulting anyone else.
-    this._scroll_verticalScrollOffset = this._adjustForEdgeResistance(offsetY, 0, maxOffsetY, touch.resistanceCoefficient, touch.resistanceAsymptote);
-    this._scroll_horizontalScrollOffset = this._adjustForEdgeResistance(offsetX, 0, maxOffsetX, touch.resistanceCoefficient, touch.resistanceAsymptote);
+    offsetX = this._adjustForEdgeResistance(offsetX, 0, maxOffsetX, touch.resistanceCoefficient, touch.resistanceAsymptote);
+    offsetY = this._adjustForEdgeResistance(offsetY, 0, maxOffsetY, touch.resistanceCoefficient, touch.resistanceAsymptote);
+    
+    if (touch.scrolling.x) this._scroll_horizontalScrollOffset = offsetX;
+    if (touch.scrolling.y) this._scroll_verticalScrollOffset = offsetY;
     
     this._applyCSSTransforms(touch.layer);
     
@@ -987,10 +990,14 @@ SC.ScrollView = SC.View.extend(SC.Border, {
   bouncyBounce: function(velocity, value, minValue, maxValue, de, ac) {
     if (value < minValue) {
       if (velocity < 0) velocity = velocity + ((minValue - value) * de);
-      else velocity = (minValue-value) * ac;
+      else {
+        velocity = Math.min((minValue-value) * ac + 0.3, minValue - value - 0.1);
+      }
     } else if (value > maxValue) {
       if (velocity > 0) velocity = velocity - ((value - maxValue) * de);
-      else velocity = -((value - maxValue) * ac);
+      else {
+        velocity = -Math.min((value - maxValue) * ac + 0.3, value - maxValue - 0.1);
+      }
     }
     return velocity;
   },
@@ -1035,9 +1042,9 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       touch.timeout = null;
       
       SC.RunLoop.begin();
-      /*this.set("scale", this._scale);
+      this.set("scale", this._scale);
       this.set("verticalScrollOffset", this._scroll_verticalScrollOffset);
-      this.set("horizontalScrollOffset", this._scroll_horizontalScrollOffset);*/
+      this.set("horizontalScrollOffset", this._scroll_horizontalScrollOffset);
       SC.RunLoop.end();
       return;
     }
@@ -1176,8 +1183,8 @@ SC.ScrollView = SC.View.extend(SC.Border, {
   contentViewFrameDidChange: function() {
     var view   = this.get('contentView'), 
         f      = (view) ? view.get('frame') : null,
-        width  = (f) ? f.width : 0,  
-        height = (f) ? f.height : 0,
+        width  = (f) ? f.width * this._scale : 0,  
+        height = (f) ? f.height * this._scale : 0,
         dim    = this.get('frame'),
         ourFrame = this.get("frame");
     
