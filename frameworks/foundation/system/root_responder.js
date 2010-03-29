@@ -7,6 +7,8 @@
 
 require('system/ready');
 
+SC.LOG_TOUCH_EVENTS = YES;
+
 /** @class
 
   The RootResponder captures events coming from a web browser and routes them 
@@ -464,6 +466,7 @@ SC.RootResponder = SC.Object.extend({
   */
   setup: function() {
     this.listenFor('touchstart touchmove touchend touchcancel'.w(), document);
+
   },
   
   // ................................................................................
@@ -707,6 +710,9 @@ SC.RootResponder = SC.Object.extend({
     var target = touch.targetView, view = target,
         chain = [], idx, len;
     
+    if (SC.LOG_TOUCH_EVENTS) {
+      SC.Logger.info('  -- Received one touch on %@'.fmt(target.toString()));
+    }
     // work up the chain until we get the root
     while (view && (view !== startingPoint)) {
       chain.push(view);
@@ -716,9 +722,14 @@ SC.RootResponder = SC.Object.extend({
     // work down the chain
     for (len = chain.length, idx = 0; idx < len; idx++) {
       view = chain[idx];
-      
+      SC.Logger.info('  -- Checking %@ for captureTouch response…'.fmt(view.toString()));
+
       // see if it captured the touch
       if (view.tryToPerform('captureTouch', touch)) {
+        if (SC.LOG_TOUCH_EVENTS) {
+          SC.Logger.info('   -- Making %@ touch responder because it returns YES to captureTouch'.fmt(view.toString())); 
+        }
+        
         // if so, make it the touch's responder
         this.makeTouchResponder(touch, view, shouldStack); // triggers touchStart/Cancel/etc. event.
         return; // and that's all we need
@@ -738,6 +749,9 @@ SC.RootResponder = SC.Object.extend({
     @returns {Boolean}
   */
   touchstart: function(evt) {
+    if (SC.LOG_TOUCH_EVENTS) {
+      SC.Logger.info('-- Received touchstart event on document');
+    }
     try {
       // loop through changed touches, calling touchStart, etc.
       var idx, touches = evt.changedTouches, len = touches.length, target, view, touch, touchEntry;
@@ -749,7 +763,10 @@ SC.RootResponder = SC.Object.extend({
       for (idx = 0; idx < len; idx++) {
         touch = touches[idx];
 
-        
+        if (SC.LOG_TOUCH_EVENTS) {
+          SC.Logger.info('  -- Processing touch %@ of %@ (#%@)'.fmt(idx+1, len, touch.identifier));
+        }
+
         // prepare a touch entry (our internal representation)
         touchEntry = SC.Touch.create(touch, this);
         touchEntry.timeStamp = evt.timeStamp;
@@ -932,9 +949,9 @@ SC.Touch = function(touch, touchContext) {
   // get the raw target view (we'll refine later)
   this.touchContext = touchContext;
   this.identifier = touch.identifier; // for now, our internal id is WebKit's id.
-  this.targetView = touch.targetNode ? SC.$(touch.targetNode).view()[0] : null;
-  this.target = touch.targetNode;
-  
+  this.targetView = touch.target ? SC.$(touch.target).view()[0] : null;
+  this.target = touch.target;
+
   this.view = undefined;
   this.touchResponder = this.nextTouchResponder = undefined;
   this.touchResponders = [];
