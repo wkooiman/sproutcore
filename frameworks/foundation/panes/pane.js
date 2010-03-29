@@ -91,7 +91,7 @@ SC.Pane = SC.View.extend( /** @scope SC.Pane.prototype */ {
   */
   page: null,
   
-  controlStyle: "sc-empty",
+  theme : "sc-empty",
   
   // .......................................................
   // ROOT RESPONDER SUPPORT
