@@ -77,6 +77,8 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     if(view.calculatedWidth && view.calculatedWidth!==0){
       contentWidth = view.calculatedWidth; 
     }
+    contentWidth *= this.get("scale");
+    
     var containerWidth = this.get('containerView').get('frame').width ;
     return Math.max(0, contentWidth-containerWidth) ;
   }.property(),
@@ -98,6 +100,8 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     if(view.calculatedHeight && view.calculatedHeight!==0){
       contentHeight = view.calculatedHeight; 
     }
+    contentHeight *= this.get("scale");
+    
     var containerHeight = this.get('containerView').get('frame').height ;
     return Math.max(0, contentHeight-containerHeight) ;
   }.property(),
@@ -759,8 +763,8 @@ SC.ScrollView = SC.View.extend(SC.Border, {
 
     // calculate position in content
     var globalFrame = this.convertFrameToView(this.get("frame"), null),
-        positionInContentX = horizontalScrollOffset + (avg.x - globalFrame.x) / this._scale,
-        positionInContentY = verticalScrollOffset + (avg.y - globalFrame.y) / this._scale;
+        positionInContentX = (horizontalScrollOffset + (avg.x - globalFrame.x)) / this._scale,
+        positionInContentY = (verticalScrollOffset + (avg.y - globalFrame.y)) / this._scale;
     
     
     this.touch = {
@@ -850,12 +854,12 @@ SC.ScrollView = SC.View.extend(SC.Border, {
         maxOffsetX;
         
     // calculate new position in content
-    var positionInContentX = (this._scroll_horizontalScrollOffset||0) + (touchX - touch.globalFrame.x) / this._scale,
-        positionInContentY = (this._scroll_verticalScrollOffset||0) + (touchY - touch.globalFrame.y) / this._scale;
+    var positionInContentX = ((this._scroll_horizontalScrollOffset||0) + (touchX - touch.globalFrame.x)) / this._scale,
+        positionInContentY = ((this._scroll_verticalScrollOffset||0) + (touchY - touch.globalFrame.y)) / this._scale;
     
     // calculate deltas
-    var deltaY = positionInContentX - touch.startTouchOffset.y,
-        deltaX = positionInContentY - touch.startTouchOffset.x;
+    var deltaX = positionInContentX - touch.startTouchOffset.x,
+        deltaY = positionInContentY - touch.startTouchOffset.y;
     
     if (!touch.scrolling.x && Math.abs(deltaX) > touch.scrollTolerance.x && touch.enableScrolling.x) {
       // say we are scrolling
@@ -1031,9 +1035,9 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       touch.timeout = null;
       
       SC.RunLoop.begin();
-      this.set("scale", this._scale);
+      /*this.set("scale", this._scale);
       this.set("verticalScrollOffset", this._scroll_verticalScrollOffset);
-      this.set("horizontalScrollOffset", this._scroll_horizontalScrollOffset);
+      this.set("horizontalScrollOffset", this._scroll_horizontalScrollOffset);*/
       SC.RunLoop.end();
       return;
     }
