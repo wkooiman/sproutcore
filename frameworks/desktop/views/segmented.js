@@ -255,6 +255,10 @@ SC.SegmentedView = SC.View.extend(SC.Control,
   },
   
   init: function() {
+    var classnames = SC.clone(this.get('classNames'));
+    classnames.push(this.get('controlStyle'));
+    this.set('classNames', classnames);
+      
     sc_super();
     this.itemsDidChange() ;
   },
@@ -272,8 +276,6 @@ SC.SegmentedView = SC.View.extend(SC.Control,
     // collect some data 
     var items = this.get('displayItems');
     
-    var theme = this.get('theme');
-    if (theme) context.addClass(theme);
     if (firstTime || this.get('renderLikeFirstTime')) {
       this._seg_displayItems = items; // save for future
       this.renderDisplayItems(context, items) ;
