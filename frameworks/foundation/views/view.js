@@ -255,7 +255,7 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     this._last_theme = theme;
     
     // replace the layer
-    if (this.get("layer")) this.replaceLayer();
+    if (this.get("layer") && this._hasCreatedChildViews) this.replaceLayer();
     
     // notify child views
     if (this._hasCreatedChildViews) this._notifyThemeDidChange();

@@ -815,7 +815,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       touch: touch
     };
 
-    if (starting) {
+    if (!this.tracking) {
       this.tracking = YES;
       this.dragging = NO;
     }
@@ -959,6 +959,9 @@ SC.ScrollView = SC.View.extend(SC.Border, {
         touch.captureTouch(this);
         if (touch.touchResponder && touch.touchResponder !== this) touch.touchResponder.tryToPerform("touchEnd", touch);
       }
+      
+      this.tracking = NO;
+      this.dragging = NO;
     }
   },
   

@@ -633,7 +633,13 @@ SC.RootResponder = SC.Object.extend({
     if (touch.touchResponder === responder) return;
     
     // send touchStart
-    responder = this.sendEvent("touchStart", touch, responder);
+    // get the target pane
+    var pane;
+    if (responder) pane = responder.get('pane') ;
+    else pane = this.get('keyPane') || this.get('mainPane') ;
+    
+    // if we found a valid pane, send the event to it
+    responder = (pane) ? pane.sendEvent("touchStart", touch, responder) : null ;
 
     // and again, now that we have more detail.
     if (touch.touchResponder === responder) return;    
@@ -670,11 +676,15 @@ SC.RootResponder = SC.Object.extend({
     // now that we've popped off, we can push on
     if (responder) {
       this.assignTouch(touch, responder);
-      stack.push(responder);
       
-      // update responder helpers
-      touch.touchResponder = responder;
-      touch.nextTouchResponder = stack[stack.length - 2];
+      // keep in mind, it could be one we popped off _to_ above...
+      if (responder !== touch.touchResponder) {
+        stack.push(responder);
+      
+        // update responder helpers
+        touch.touchResponder = responder;
+        touch.nextTouchResponder = stack[stack.length - 2];
+      }
     }
   },
   
