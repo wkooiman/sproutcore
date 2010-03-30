@@ -990,22 +990,41 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     
     P.S.: should this be named "bouncityBounce" instead?
   */
-  bouncyBounce: function(velocity, value, minValue, maxValue, de, ac) {
+  bouncyBounce: function(velocity, value, minValue, maxValue, de, ac, additionalAcceleration) {
+    // we have 4 possible paths. On a higher level, we have two leaf paths that can be applied
+    // for either of two super-paths.
+    //
+    // The first path is if we are decelerating past an edge: in this case, this function must
+    // must enhance that deceleration. In this case, our math boils down to taking the amount
+    // by which we are past the edge, multiplying it by our deceleration factor, and reducing
+    // velocity by that amount.
+    //
+    // The second path is if we are not decelerating, but are still past the edge. In this case,
+    // we must start acceleration back _to_ the edge. The math here takes the distance we are from
+    // the edge, multiplies by the acceleration factor, and then performs two additional things:
+    // First, it speeds up the acceleration artificially  with additionalAcceleration; this will
+    // make the stop feel more sudden, as it will still have this additional acceleration when it reaches
+    // the edge. Second, it ensures the result does not go past the final value, so we don't end up
+    // bouncing back and forth all crazy-like.
     if (value < minValue) {
       if (velocity < 0) velocity = velocity + ((minValue - value) * de);
       else {
-        velocity = Math.min((minValue-value) * ac + 0.3, minValue - value - 0.1);
+        velocity = Math.min((minValue-value) * ac + additionalAcceleration, minValue - value);
       }
     } else if (value > maxValue) {
       if (velocity > 0) velocity = velocity - ((value - maxValue) * de);
       else {
-        velocity = -Math.min((value - maxValue) * ac + 0.3, value - maxValue - 0.1);
+        velocity = -Math.min((value - maxValue) * ac + additionalAcceleration, value - maxValue);
       }
     }
     return velocity;
   },
 
   decelerateAnimation: function() {
+    // get a bunch of properties. They are named well, so not much explanation of what they are...
+    // However, note maxOffsetX/Y takes into account the scale;
+    // also, newX/Y adds in the current deceleration velocity (the deceleration velocity will
+    // be changed later in this function).
     var touch = this.touch,
         scale = this._scale,
         maxOffsetX = Math.max(0, touch.contentSize.width * scale - touch.containerSize.width),
@@ -1016,43 +1035,130 @@ SC.ScrollView = SC.View.extend(SC.Border, {
         t = Math.max(now - touch.lastEventTime, 1);
     
     var de = touch.decelerationFromEdge, ac = touch.accelerationToEdge;
-
-    // update scroll
-    this._scroll_horizontalScrollOffset = newX;
-    this._scroll_verticalScrollOffset = newY;
     
+    // determine if position was okay before adjusting scale (which we do, in
+    // a lovely, animated way, for the scaled out/in too far bounce-back).
+    // if the position was okay, then we are going to make sure that we keep the
+    // position okay when adjusting the scale.
+    //
+    // Position OKness, here, referring to if the position is valid (within
+    // minimum and maximum scroll offsets)
+    var validXPosition = newX >= 0 && newX <= maxOffsetX;
+    var validYPosition = newY >= 0 && newY <= maxOffsetY;
     
-    // handle scale being out-of-range
+    // We are going to change scale in a moment, but the position should stay the
+    // same, if possible (unless it would be more jarring, as described above, in
+    // the case of starting with a valid position and ending with an invalid one).
+    //
+    // Because we are changing the scale, we need to make the position scale-neutral.
+    // we'll make it non-scale-neutral after applying scale.
+    //
+    // Question: might it be better to save the center position instead, so scaling
+    // bounces back around the center of the screen?
+    newX /= this._scale;
+    newY /= this._scale;
+    
+    // scale velocity (amount to change) starts out at 0 each time, because 
+    // it is calculated by how far out of bounds it is, rather than by the
+    // previous such velocity.
     var sv = 0;
-    sv = this.bouncyBounce(sv, scale, touch.minimumScale, touch.maximumScale, de, ac);
+    
+    // do said calculation; we'll use the same bouncyBounce method used for everything
+    // else, but our adjustor that gives a minimum amount to change by and (which, as we'll
+    // discuss, is to make the stop feel slightly more like a stop), we'll leave at 0 
+    // (scale doesn't really need it as much; if you disagree, at least come up with 
+    // numbers more appropriate for scale than the ones for X/Y)
+    sv = this.bouncyBounce(sv, scale, touch.minimumScale, touch.maximumScale, de, ac, 0);
+    
+    // add the amount to scale. This is linear, rather than multiplicative. If you think
+    // it should be multiplicative (or however you say that), come up with a new formula.
     this._scale = scale = scale + sv;
     
-    this._applyCSSTransforms(touch.layer);
+    // now we can convert newX/Y back to scale-specific coordinates...
+    newX *= this._scale;
+    newY *= this._scale;
     
-    // apply decay
+    // It looks very weird if the content started in-bounds, but the scale animation
+    // made it not be in bounds; it causes the position to animate snapping back, and,
+    // well, it looks very weird. It is more proper to just make sure it stays in a valid
+    // position. So, we'll determine the new maximum/minimum offsets, and then, if it was
+    // originally a valid position, we'll adjust the new position to a valid position as well.
+    
+    
+    // determine new max offset
+    maxOffsetX = Math.max(0, touch.contentSize.width * scale - touch.containerSize.width);
+    maxOffsetY = Math.max(0, touch.contentSize.height * scale - touch.containerSize.height);
+    
+    // see if scaling messed up the X position (but ignore if 'tweren't right to begin with).
+    if (validXPosition && (newX < 0 || newX > maxOffsetX)) {
+      // Correct the position
+      newX = Math.max(0, Math.min(newX, maxOffsetX));
+    }
+    
+    // now the y
+    if (validYPosition && (newY < 0 || newY > maxOffsetY)) {
+      // again, correct it...
+      newY = Math.max(0, Math.min(newY, maxOffsetY));
+    }
+    
+    
+    // now that we are done modifying the position, we may update the actual scroll
+    this._scroll_horizontalScrollOffset = newX;
+    this._scroll_verticalScrollOffset = newY;
+    this._applyCSSTransforms(touch.layer); // <- Does what it sounds like.
+    
+    // Now we have to adjust the velocities. The velocities are simple x and y numbers that
+    // get added to the scroll X/Y positions each frame.
+    // The decay rate is .950 per frame. To achieve some semblance of accuracy, we
+    // make it to the power of the elapsed number of frames. This is not fully accurate,
+    // as this is applying the elapsed time between this frame and the previous time to
+    // modify the velocity for the next frame. My mind goes blank when I try to figure out
+    // a way to fix this (given that we don't want to change the velocity on the first frame),
+    // and as it seems to work great as-is, I'm just leaving it.
     var decay = 0.950;
     touch.decelerationVelocity.y *= Math.pow(decay, (t / 10));
     touch.decelerationVelocity.x *= Math.pow(decay, (t / 10));
     
-    // adjust for bouncing
-    touch.decelerationVelocity.x = this.bouncyBounce(touch.decelerationVelocity.x, newX, 0, maxOffsetX, de, ac);
-    touch.decelerationVelocity.y = this.bouncyBounce(touch.decelerationVelocity.y, newY, 0, maxOffsetY, de, ac);
+    // We have a bouncyBounce method that adjusts the velocity for bounce. That is, if it is
+    // out of range and still going, it will slow it down. This step is decelerationFromEdge.
+    // If it is not moving (or has come to a stop from decelerating), but is still out of range, 
+    // it will start it moving back into range (accelerationToEdge)
+    // we supply de and ac as these properties.
+    // The .3 artificially increases the acceleration by .3; this is actually to make the final
+    // stop a bit more abrupt.
+    touch.decelerationVelocity.x = this.bouncyBounce(touch.decelerationVelocity.x, newX, 0, maxOffsetX, de, ac, 0.3);
+    touch.decelerationVelocity.y = this.bouncyBounce(touch.decelerationVelocity.y, newY, 0, maxOffsetY, de, ac, 0.3);
  
-    // if we ain't got no velocity... then we must be finished
+    // if we ain't got no velocity... then we must be finished, as there is no where else to go.
+    // to determine our velocity, we take the absolue value, and use that; if it is less than .01, we
+    // must be done. Note that we check scale's most recent velocity, calculated above using bouncyBounce,
+    // as well.
     var absXVelocity = Math.abs(touch.decelerationVelocity.x);
     var absYVelocity = Math.abs(touch.decelerationVelocity.y);
     if (absYVelocity < 0.01 && absXVelocity < 0.01 && Math.abs(sv) < 0.01) {
+      // we can reset the timeout, as it will no longer be required, and we don't want to re-cancel it later.
       touch.timeout = null;
       
+      // we aren't in a run loop right now (see below, where we trigger the timer)
+      // so, we must start one.
       SC.RunLoop.begin();
+      
+      // set the scale, vertical, and horizontal offsets to what they technically already are,
+      // but don't know they are yet. This will finally update things like, say, the clipping frame.
       this.set("scale", this._scale);
       this.set("verticalScrollOffset", this._scroll_verticalScrollOffset);
       this.set("horizontalScrollOffset", this._scroll_horizontalScrollOffset);
+      
+      // and now we're done, so just end the run loop and return.
       SC.RunLoop.end();
       return;
     }
     
-    // next round
+    // We now set up the next round. We are doing this as raw as we possibly can, not touching the
+    // run loop at all. This speeds up performance drastically--keep in mind, we're on comparatively
+    // slow devices, here. So, we'll just make a closure, saving "this" into "self" and calling
+    // 10ms later (or however long it takes). Note also that we save both the last event time
+    // (so we may calculate elapsed time) and the timeout we are creating, so we may cancel it in future.
     var self = this;
     touch.lastEventTime = Date.now();
     this.touch.timeout = setTimeout(function(){
