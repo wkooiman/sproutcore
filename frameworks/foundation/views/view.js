@@ -1295,17 +1295,18 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     @param {SC.RenderContext} context the render context
     @param {Boolean} firstTime YES if this is creating a layer
     @returns {void}
-  */
+  */   
   render: function(context, firstTime) {
-    if (firstTime) this.renderChildViews(context, firstTime) ;
-    if (this.createRenderer) {
-      if (firstTime) { 
-        if (this.renderer) this.renderer.render(context);
+      if (this.createRenderer) {
+        if (firstTime) { 
+          if (this.renderer) this.renderer.render(context);
+        } else {
+          if (this.renderer) this.renderer.update();
+        }
       } else {
-        if (this.renderer) this.renderer.update();
+        if (firstTime) this.renderChildViews(context, firstTime);
       }
-    }
-  },
+    },
   
   
   /** @private - 

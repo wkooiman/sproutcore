@@ -107,8 +107,6 @@ SC.EmptyTheme.renderers.Button = SC.Renderer.extend({
     classes.icon = !!this.icon;
     
     q.setClass(classes);
-    theme = this.oldButtonTheme;
-    if (theme) q.addClass(theme);
     
     
     // update title
