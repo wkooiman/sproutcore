@@ -742,68 +742,60 @@ SC.RootResponder = SC.Object.extend({
     this.makeTouchResponder(touch, target, shouldStack);
   },
 
-  /**
-    Triggers touchStart on views.
+  /** @private
+    Called when the user touches their finger to the screen. This method
+    dispatches the touchstart event to the appropriate view.
     
+    We may receive a touchstart event for each touch, or we may receive a
+    single touchstart event with multiple touches, so we may have to dispatch
+    events to multiple views.
+
     @param {Event} evt the event
     @returns {Boolean}
   */
   touchstart: function(evt) {
-    if (SC.LOG_TOUCH_EVENTS) {
-      SC.Logger.info('-- Received touchstart event on document');
-    }
+    SC.RunLoop.begin();
     try {
-      // loop through changed touches, calling touchStart, etc.
       var idx, touches = evt.changedTouches, len = touches.length, target, view, touch, touchEntry;
-      
-      // prepare event for touch mapping.
+
       evt.touchContext = this;
-      
-      // each touch
+
+      // Loop through each touch we received in this event
       for (idx = 0; idx < len; idx++) {
         touch = touches[idx];
 
-        if (SC.LOG_TOUCH_EVENTS) {
-          SC.Logger.info('  -- Processing touch %@ of %@ (#%@)'.fmt(idx+1, len, touch.identifier));
-        }
-
-        // prepare a touch entry (our internal representation)
+        // Create an SC.Touch instance for every touch.
         touchEntry = SC.Touch.create(touch, this);
         touchEntry.timeStamp = evt.timeStamp;
-        
-        // map touch
+
+        // Store the SC.Touch object. We use the identifier property (provided
+        // by the browser) to disambiguate between touches. These will be used
+        // later to determine if the touches have changed.
         this._touches[touch.identifier] = touchEntry;
+
+        // Save a reference to the original event
+        touch.event = evt;
         
-        // set the event (so default action, etc. can be stopped)
-        touch.event = evt; // will be unset momentarily
-        
-        // send out event thing: creates a chain, goes up it, then down it, with startTouch and cancelTouch.
-        // in this case, only startTouch, as there are no existing touch responders.
-        // We send the touchEntry because it is cached (we add the helpers only once)
+        // Dispatch the event to the corresponding view.
         this.captureTouch(touchEntry, this);
         
-        // and, unset
+        // Unset the reference to the original event so we can garbage collect.
         touch.event = null;
-        
       }
     } catch (e) {
-      SC.Logger.warn('Exception during touchStart: %@'.fmt(e)) ;
-      this._touchViews = null ;
-      SC.RunLoop.end();
-      return NO ;
+      SC.Logger.warn('Exception during touchstart: %@'.fmt(e)) ;
     }
 
+    SC.RunLoop.end();
     return NO;
   },
 
-  /**
-    @private
-    used to keep track of when a specific type of touch event was last handled, to see if it needs to be re-handled
+  /** @private
+    Event handler for touchmove event.
   */
   touchmove: function(evt) {
     SC.RunLoop.begin();
     try {
-      // pretty much all we gotta do is update touches, and figure out which views need updating.
       var touches = evt.changedTouches, touch, touchEntry,
           idx, len = touches.length, view, changedTouches, viewTouches, firstTouch,
           changedViews = {};
@@ -876,10 +868,9 @@ SC.RootResponder = SC.Object.extend({
   touchend: function(evt) {
     SC.RunLoop.begin();
     try {
-      var touches = evt.changedTouches, touch, touchEntry,
-          idx, len = touches.length, 
-          view, 
+      var touches = evt.changedTouches, len = touches.length,
           action = evt.isCancel ? "touchCancelled" : "touchEnd",
+          touch, touchEntry, idx, view, 
           responderIdx, responders, responder;
       
       for (idx = 0; idx < len; idx++) {
@@ -920,7 +911,6 @@ SC.RootResponder = SC.Object.extend({
       }
     } catch (e) {
       SC.Logger.warn('Exception during touchEnd: %@'.fmt(e)) ;
-      this._touchViews = null ;
       SC.RunLoop.end();
       return NO ;
     }
@@ -962,7 +952,15 @@ SC.Touch = function(touch, touchContext) {
 
 SC.Touch.prototype = {
   /**@scope SC.Touch.prototype*/
-  
+
+  /**
+    Indicates that you want to allow the normal default behavior.  Sets
+    the hasCustomEventHandling property to YES but does not cancel the event.
+  */
+  allowDefault: function() {
+    this.hasCustomEventHandling = YES ;
+  },
+
   /**
     If the touch is associated with an event, prevents default action on the event.
   */
