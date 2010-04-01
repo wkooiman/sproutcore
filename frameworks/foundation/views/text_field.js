@@ -367,6 +367,7 @@ SC.TextFieldView = SC.FieldView.extend(SC.StaticLayout, SC.Editable,
   },
 
   render: function(context, firstTime) {
+    console.log('render');
     sc_super() ;
 
     var disabled = this.get('isEnabled') ? '' : 'disabled="disabled"',
