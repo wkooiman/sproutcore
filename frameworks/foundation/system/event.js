@@ -100,48 +100,6 @@ SC.Event = function(originalEvent) {
     this.wheelDelta = this.wheelDeltaY = SC.browser.msie ? 0-originalEvent.wheelDelta : originalEvent.wheelDelta ;
     this.wheelDeltaX = 0 ;
   }
-  
-  // translate X/Y coordinates of touch into a real target
-  if (SC.browser.touch && this.type == "touchstart") {
-    var touches = this.changedTouches, target, elem;
-    if (touches && touches.length > 0) {
-      var firstTouch = touches[0];
-      this.pageX = firstTouch.pageX;
-      this.pageY = firstTouch.pageY;
-    }
-
-    target = elem = this.target;
-
-    if (target === SC.RootResponder.responder._touchInterceptElement) {
-      elem.style.display = 'none';
-      // document.body.removeChild(elem);
-      
-      // adjust target for whole event
-      target = document.elementFromPoint(this.pageX, this.pageY);
-      this.target = target;
-      
-      // adjust target for all touches in event
-      var touch;
-      len = this.touches.length;
-      for (idx = 0; idx < len; idx++) {
-        touch = this.touches[idx];
-        
-        // use targetNode because apparently "target" is not modifiable
-        touch.targetNode = document.elementFromPoint(touch.pageX, touch.pageY);
-      }
-      
-      // and the changed touches
-      len = this.changedTouches.length;
-      for (idx = 0; idx < len; idx++) {
-        touch = this.changedTouches[idx];
-        touch.targetNode = document.elementFromPoint(touch.pageX, touch.pageY);
-      }
-      
-      // document.body.appendChild(elem);
-      elem.style.display = 'block';
-    }
-    target = elem = null; //cleanup
-  }
 
   return this; 
 } ;

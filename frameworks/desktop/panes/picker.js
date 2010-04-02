@@ -19,10 +19,14 @@ sc_require('panes/palette');
   pointer :take default [0,1,2,3,2] or custom matrix to choose one of four perfect pointer positions.Ex:
            perfect right (0) > perfect left (1) > perfect top (2) > perfect bottom (3)
            fallback to perfect top (2)
+  menu-pointer :take default [3,0,1,2,3] or custom matrix to choose one of four perfect pointer positions.Ex:
+          perfect bottom (3) > perfect right (0) > perfect left (1) > perfect top (2)
+          fallback to perfect bottom (3)
 */
 SC.PICKER_MENU = 'menu';
 SC.PICKER_FIXED = 'fixed';
 SC.PICKER_POINTER = 'pointer';
+SC.PICKER_MENU_POINTER = 'menu-pointer';
 /** 
   Pointer layout for perfect right/left/top/bottom
 */
@@ -98,6 +102,14 @@ SC.POINTER_LAYOUT = ["perfectRight", "perfectLeft", "perfectTop", "perfectBottom
 
   perfect bottom (3) > perfect right (0) > perfect left (1) > perfect top (2)
   fallback to perfect top (2)
+
+  8. menu-pointer with default position pref matrix [3,0,1,2,3]:
+  {{{
+    SC.PickerPane.create({layout: { width: 400, height: 200 },contentView: SC.View.extend({})
+    }).popup(anchor, SC.PICKER_MENU_POINTER);
+  }}}
+  perfect bottom (3) > perfect right (0) > perfect left (1) > perfect top (2)
+  fallback to perfect bottom (3)
   
   @extends SC.PalettePane
   @since SproutCore 1.0
@@ -137,6 +149,20 @@ SC.PickerPane = SC.PalettePane.extend({
   preferMatrix: null,
 
   /**
+    default/custom offset of pointer for picker-pointer or pointer-menu
+
+    @property {Array}
+  */
+  pointerOffset: null,
+
+  /**
+    default offset of extra-right pointer for picker-pointer or pointer-menu
+
+    @property Number
+  */
+  extraRightOffset: 0,
+
+  /**
     Displays a new picker pane according to the passed parameters.
     Every parameter except for the anchorViewOrElement is optional.
   
@@ -145,12 +171,13 @@ SC.PickerPane = SC.PalettePane.extend({
     @param {Array} preferMatrix optional apply custom offset or position pref matrix for specific preferType
     @returns {SC.PickerPane} receiver
   */
-  popup: function(anchorViewOrElement, preferType, preferMatrix) {
+  popup: function(anchorViewOrElement, preferType, preferMatrix, pointerOffset) {
     var anchor = anchorViewOrElement.isView ? anchorViewOrElement.get('layer') : anchorViewOrElement;
     this.beginPropertyChanges();
     this.set('anchorElement',anchor) ;
     if (preferType) this.set('preferType',preferType) ;
     if (preferMatrix) this.set('preferMatrix',preferMatrix) ;
+    if (pointerOffset) this.set('pointerOffset',pointerOffset) ;
     this.endPropertyChanges();
     this.positionPane();
     this.append();
@@ -167,7 +194,7 @@ SC.PickerPane = SC.PalettePane.extend({
         preferType   = this.get('preferType'),
         preferMatrix = this.get('preferMatrix'),
         layout       = this.get('layout'),
-        origin ;
+        origin, maxHeight, minHeight;
     
     // usually an anchorElement will be passed.  The ideal position is just 
     // below the anchor + default or custom offset according to preferType.
@@ -175,6 +202,7 @@ SC.PickerPane = SC.PalettePane.extend({
     // other alternative and fallback position.
     if (anchor) {
       anchor = this.computeAnchorRect(anchor);
+      if(anchor.x ===0 && anchor.y ===0) return ;
       origin = SC.cloneRect(anchor);
 
       if (preferType) {
@@ -199,8 +227,19 @@ SC.PickerPane = SC.PalettePane.extend({
         origin.y += origin.height ;
       }
       origin = this.fitPositionToScreen(origin, this.get('frame'), anchor) ;
+      if(!SC.none(layout.minHeight)) {
+        minHeight = this.layout.minHeight;
+      }
+      if(!SC.none(layout.maxHeight)) {
+        maxHeight = this.layout.maxHeight;
+      }
       layout = { width: origin.width, height: origin.height, left: origin.x, top: origin.y };
-
+      if(!SC.none(minHeight)) {
+        layout.minHeight = minHeight;
+      }
+      if(!SC.none(maxHeight)) {
+        layout.maxHeight = maxHeight;
+      }
     // if no anchor view has been set for some reason, just center.
     } else {
       layout = { width: layout.width, height: layout.height, centerX: 0, centerY: 0 };
@@ -236,11 +275,13 @@ SC.PickerPane = SC.PalettePane.extend({
     if(this.preferType) {
       switch(this.preferType) {
         case SC.PICKER_MENU:
-          // apply default + menu re-position rule
+          // apply menu re-position rule
           picker = this.fitPositionToScreenMenu(wret, picker, this.get('isSubMenu')) ;
           break;
         case SC.PICKER_POINTER:
+        case SC.PICKER_MENU_POINTER:
           // apply pointer re-position rule
+          this.setupPointer();
           picker = this.fitPositionToScreenPointer(wret, picker, anchor) ;
           break;
           
@@ -299,63 +340,87 @@ SC.PickerPane = SC.PalettePane.extend({
   },
 
   /** @private
-    re-position rule optimized for Menu to enforce min left(7px)/right(20px) padding to the window
+    Reposition the pane in a way that is optimized for menus.
+
+    Specifically, we want to ensure that the pane is at least 7 pixels from
+    the left side of the screen, and 20 pixels from the right side.
+
+    If the menu is a submenu, we also want to reposition the pane to the left
+    of the parent menu if it would otherwise exceed the width of the viewport.
   */
-  fitPositionToScreenMenu: function(w, f, subMenu) {
-    // min left/right padding to the window
-    if( (f.x + f.width) > (w.width-20) ) {
-      // sub-menus should be re-anchored to the left of the parent menu
-      if (subMenu) f.x = f.x - (f.width*2);
-      else f.x = w.width - f.width - 20;
+  fitPositionToScreenMenu: function(windowFrame, paneFrame, subMenu) {
+
+    // Set up init location for submenu
+    if (subMenu) {
+      paneFrame.x -= this.get('submenuOffsetX');
+      paneFrame.y -= Math.floor(this.get('menuHeightPadding')/2);
     }
-    if( f.x < 7 ) f.x = 7;
-    
-    // if the height of the menu is bigger than the window height resize it.
-    if( f.height+f.y+35 >= w.height){
-      if (f.height+50 >= w.height) {
-        f.y = 15;
-        f.height = w.height - 50;
+
+    // If the right edge of the pane is within 20 pixels of the right edge
+    // of the window, we need to reposition it.
+    if( (paneFrame.x + paneFrame.width) > (windowFrame.width-20) ) {
+      if (subMenu) {
+        // Submenus should be re-anchored to the left of the parent menu
+        paneFrame.x = paneFrame.x - (paneFrame.width*2);
       } else {
-        f.y += (w.height - (f.height+f.y+35));
+        // Otherwise, just position the pane 20 pixels from the right edge
+        paneFrame.x = windowFrame.width - paneFrame.width - 20;
       }
     }
 
-    return f ;    
+    // Make sure we are at least 7 pixels from the left edge of the screen.
+    if( paneFrame.x < 7 ) paneFrame.x = 7;
+    
+    if (paneFrame.y < 7) {
+      paneFrame.height += paneFrame.y;
+      paneFrame.y = 7;
+    }
+
+    // If the height of the menu is bigger than the window height, resize it.
+    if( paneFrame.height+paneFrame.y+35 >= windowFrame.height){
+      if (paneFrame.height+50 >= windowFrame.height) {
+        paneFrame.y = 15;
+        paneFrame.height = windowFrame.height - 50;
+      } else {
+        paneFrame.y += (windowFrame.height - (paneFrame.height+paneFrame.y+35));
+      }
+    }
+
+    return paneFrame ;
   },
 
   /** @private
-    re-position rule for triangle pointer picker: take default [0,1,2,3,2] or custom matrix to choose one of four perfect pointer positions.
+    re-position rule for triangle pointer picker.
   */
   fitPositionToScreenPointer: function(w, f, a) {
+    var overlapTunningX = (a.height > 12) ? 0 : 1;
+    var overlapTunningY = (a.height > 12) ? 0 : 3;
+
+    var offset = [this.pointerOffset[0]+overlapTunningX,
+                  this.pointerOffset[1]-overlapTunningX,
+                  this.pointerOffset[2]-overlapTunningY,
+                  this.pointerOffset[3]+overlapTunningY];
+
     // initiate perfect positions matrix
     // 4 perfect positions: right > left > top > bottom
     // 2 coordinates: x, y
     // top-left corner of 4 perfect positioned f  (4x2)
-    var overlapTunningX = (a.height > 12) ? 0 : 1;
-    var overlapTunningY = (a.height > 12) ? 0 : 3;
-
-    var prefP1    =[[a.x+a.width+(7+overlapTunningX), a.y+parseInt(a.height/2,0)-40], 
-                    [a.x-f.width-(7+overlapTunningX),  a.y+parseInt(a.height/2,0)-40], 
-                    [a.x+parseInt((a.width/2)-(f.width/2),0), a.y-f.height-(17+overlapTunningY)],
-                    [a.x+parseInt((a.width/2)-(f.width/2),0), a.y+a.height+(17+overlapTunningY)]];
+    var prefP1    =[[a.x+a.width+offset[0],                   a.y+parseInt(a.height/2,0)-40],
+                    [a.x-f.width+offset[1],                   a.y+parseInt(a.height/2,0)-40],
+                    [a.x+parseInt((a.width/2)-(f.width/2),0), a.y-f.height+offset[2]],
+                    [a.x+parseInt((a.width/2)-(f.width/2),0), a.y+a.height+offset[3]]];
     // bottom-right corner of 4 perfect positioned f  (4x2)
-    var prefP2    =[[a.x+a.width+f.width+(7+overlapTunningX), a.y+parseInt(a.height/2,0)+f.height-24], 
-                    [a.x-(7+overlapTunningX),                  a.y+parseInt(a.height/2,0)+f.height-24], 
-                    [a.x+parseInt((a.width/2)-(f.width/2),0)+f.width, a.y-(17+overlapTunningY)],
-                    [a.x+parseInt((a.width/2)-(f.width/2),0)+f.width, a.y+a.height+f.height+(17+overlapTunningY)]];
+    var prefP2    =[[a.x+a.width+f.width+offset[0],                   a.y+parseInt(a.height/2,0)+f.height-24],
+                    [a.x+offset[1],                                   a.y+parseInt(a.height/2,0)+f.height-24],
+                    [a.x+parseInt((a.width/2)-(f.width/2),0)+f.width, a.y+offset[2]],
+                    [a.x+parseInt((a.width/2)-(f.width/2),0)+f.width, a.y+a.height+f.height+offset[3]]];
     // cutoff of 4 perfect positioned f: top, right, bottom, left  (4x4)
     var cutoffPrefP =[[prefP1[0][1]>0 ? 0 : 0-prefP1[0][1], prefP2[0][0]<w.width ? 0 : prefP2[0][0]-w.width, prefP2[0][1]<w.height ? 0 : prefP2[0][1]-w.height, prefP1[0][0]>0 ? 0 : 0-prefP1[0][0]], 
                       [prefP1[1][1]>0 ? 0 : 0-prefP1[1][1], prefP2[1][0]<w.width ? 0 : prefP2[1][0]-w.width, prefP2[1][1]<w.height ? 0 : prefP2[1][1]-w.height, prefP1[1][0]>0 ? 0 : 0-prefP1[1][0]],
                       [prefP1[2][1]>0 ? 0 : 0-prefP1[2][1], prefP2[2][0]<w.width ? 0 : prefP2[2][0]-w.width, prefP2[2][1]<w.height ? 0 : prefP2[2][1]-w.height, prefP1[2][0]>0 ? 0 : 0-prefP1[2][0]],
                       [prefP1[3][1]>0 ? 0 : 0-prefP1[3][1], prefP2[3][0]<w.width ? 0 : prefP2[3][0]-w.width, prefP2[3][1]<w.height ? 0 : prefP2[3][1]-w.height, prefP1[3][0]>0 ? 0 : 0-prefP1[3][0]]];
 
-    if(!this.preferMatrix || this.preferMatrix.length !== 5) {
-      // default re-position rule : perfect right (0) > perfect left (1) > perfect top (2) > perfect bottom (3)
-      // fallback to perfect top (2)
-      this.set('preferMatrix', [0,1,2,3,2]) ;
-    }
     var m = this.preferMatrix;
-    //var pointer = this.contentView.childViews[this.contentView.childViews.length-1];
 
     // initiated with fallback position
     // Will be used only if the following preferred alternative can not be found
@@ -392,17 +457,74 @@ SC.PickerPane = SC.PalettePane.extend({
         f.y = prefP1[cM][1] - cutoffPrefP[cM][2];
         this.set('pointerPosY', cutoffPrefP[cM][2]);
         i = SC.POINTER_LAYOUT.length;
-      } else if ((cM === 0 || cM === 1) && cutoffPrefP[cM][0]===0 && cutoffPrefP[cM][1]===0 && cutoffPrefP[cM][2] <= f.height-57 && cutoffPrefP[cM][3]===0) {
+      } else if ((cM === 0 || cM === 1) && cutoffPrefP[cM][0]===0 && cutoffPrefP[cM][1]===0 && cutoffPrefP[cM][2] <= f.height-51 && cutoffPrefP[cM][3]===0) {
         if (m[4] !== cM) {
           f.x = prefP1[cM][0] ;
         }
-        f.y = prefP1[cM][1] - (f.height-57) ;
-        this.set('pointerPosY', (f.height-59));
+        f.y = prefP1[cM][1] - (f.height-51) ;
+        this.set('pointerPosY', (f.height-53));
         this.set('pointerPos', SC.POINTER_LAYOUT[cM]+' extra-low');
+        i = SC.POINTER_LAYOUT.length;
+      } else if ((cM === 2 || cM === 3) && cutoffPrefP[cM][0]===0 && cutoffPrefP[cM][1]<= parseInt(f.width/2,0)-this.get('extraRightOffset') && cutoffPrefP[cM][2] ===0 && cutoffPrefP[cM][3]===0) {
+        if (m[4] !== cM) {
+          f.y = prefP1[cM][1] ;
+        }
+        f.x = prefP1[cM][0] - (parseInt(f.width/2,0)-this.get('extraRightOffset')) ;
+        this.set('pointerPos', SC.POINTER_LAYOUT[cM]+' extra-right');
         i = SC.POINTER_LAYOUT.length;
       }
     }
     return f ;    
+  },
+
+  /** @private
+    This method will set up pointerOffset and preferMatrix according to type
+    and size if not provided excplicitly.
+  */
+  setupPointer: function() {
+    // set up pointerOffset according to type and size if not provided excplicitly
+    if(!this.pointerOffset || this.pointerOffset.length !== 4) {
+      if(this.get('preferType') == SC.PICKER_MENU_POINTER) {
+        switch (this.get('controlSize')) {
+          case SC.TINY_CONTROL_SIZE:
+            this.set('pointerOffset', SC.PickerPane.TINY_PICKER_MENU_POINTER_OFFSET) ;
+            this.set('extraRightOffset', SC.PickerPane.TINY_PICKER_MENU_EXTRA_RIGHT_OFFSET) ;
+            break;
+          case SC.SMALL_CONTROL_SIZE:
+            this.set('pointerOffset', SC.PickerPane.SMALL_PICKER_MENU_POINTER_OFFSET) ;
+            this.set('extraRightOffset', SC.PickerPane.SMALL_PICKER_MENU_EXTRA_RIGHT_OFFSET) ;
+            break;
+          case SC.REGULAR_CONTROL_SIZE:
+            this.set('pointerOffset', SC.PickerPane.REGULAR_PICKER_MENU_POINTER_OFFSET) ;
+            this.set('extraRightOffset', SC.PickerPane.REGULAR_PICKER_MENU_EXTRA_RIGHT_OFFSET) ;
+            break;
+          case SC.LARGE_CONTROL_SIZE:
+            this.set('pointerOffset', SC.PickerPane.LARGE_PICKER_MENU_POINTER_OFFSET) ;
+            this.set('extraRightOffset', SC.PickerPane.LARGE_PICKER_MENU_EXTRA_RIGHT_OFFSET) ;
+            break;
+          case SC.HUGE_CONTROL_SIZE:
+            this.set('pointerOffset', SC.PickerPane.HUGE_PICKER_MENU_POINTER_OFFSET) ;
+            this.set('extraRightOffset', SC.PickerPane.HUGE_PICKER_MENU_EXTRA_RIGHT_OFFSET) ;
+            break;
+        }
+      } else {
+        this.set('pointerOffset', SC.PickerPane.PICKER_POINTER_OFFSET) ;
+        this.set('extraRightOffset', SC.PickerPane.PICKER_EXTRA_RIGHT_OFFSET) ;
+      }
+    }
+
+    // set up preferMatrix according to type if not provided excplicitly:
+    // take default [0,1,2,3,2] for picker, [3,0,1,2,3] for menu picker if
+    // custom matrix not provided excplicitly
+    if(!this.preferMatrix || this.preferMatrix.length !== 5) {
+      // menu-picker default re-position rule :
+      // perfect bottom (3) > perfect right (0) > perfect left (1) > perfect top (2)
+      // fallback to perfect bottom (3)
+      // picker default re-position rule :
+      // perfect right (0) > perfect left (1) > perfect top (2) > perfect bottom (3)
+      // fallback to perfect top (2)
+      this.set('preferMatrix', this.get('preferType') == SC.PICKER_MENU_POINTER ? [3,0,1,2,3] : [0,1,2,3,2]) ;
+    }
   },
   
   displayProperties: ["pointerPosY"],
@@ -410,18 +532,21 @@ SC.PickerPane = SC.PalettePane.extend({
   render: function(context, firstTime) {
     var ret = sc_super();
     if (context.needsContent) {
-      if (this.get('preferType') == SC.PICKER_POINTER) {
+      if (this.get('preferType') == SC.PICKER_POINTER || this.get('preferType') == SC.PICKER_MENU_POINTER) {
         context.push('<div class="sc-pointer '+this.get('pointerPos')+'" style="margin-top: '+this.get('pointerPosY')+'px"></div>');
+        context.addClass(this.get('pointerPos'));
       }
     } else {
-      var el = this.$('.sc-pointer');
-      el.attr('class', "sc-pointer "+this.get('pointerPos'));
-      el.attr('style', "margin-top: "+this.get('pointerPosY')+"px");
+      if (this.get('preferType') == SC.PICKER_POINTER || this.get('preferType') == SC.PICKER_MENU_POINTER) {
+        var el = this.$('.sc-pointer');
+        el.attr('class', "sc-pointer "+this.get('pointerPos'));
+        el.attr('style', "margin-top: "+this.get('pointerPosY')+"px");
+        context.addClass(this.get('pointerPos'));
+      }
     }
     return ret ;
   },
   
-
   /** @private - click away picker. */
   modalPaneDidClick: function(evt) {
     var f = this.get("frame");
@@ -451,3 +576,23 @@ SC.PickerPane = SC.PalettePane.extend({
 
 });
 
+/**
+  Default metrics for the different control sizes.
+*/
+SC.PickerPane.PICKER_POINTER_OFFSET = [9, -9, -18, 18];
+SC.PickerPane.PICKER_EXTRA_RIGHT_OFFSET = 20;
+
+SC.PickerPane.TINY_PICKER_MENU_POINTER_OFFSET = [9, -9, -18, 18];
+SC.PickerPane.TINY_PICKER_MENU_EXTRA_RIGHT_OFFSET = 12;
+
+SC.PickerPane.SMALL_PICKER_MENU_POINTER_OFFSET = [9, -9, -8, 8];
+SC.PickerPane.SMALL_PICKER_MENU_EXTRA_RIGHT_OFFSET = 11;
+
+SC.PickerPane.REGULAR_PICKER_MENU_POINTER_OFFSET = [9, -9, -12, 12];
+SC.PickerPane.REGULAR_PICKER_MENU_EXTRA_RIGHT_OFFSET = 12;
+
+SC.PickerPane.LARGE_PICKER_MENU_POINTER_OFFSET = [9, -9, -16, 16];
+SC.PickerPane.LARGE_PICKER_MENU_EXTRA_RIGHT_OFFSET = 17;
+
+SC.PickerPane.HUGE_PICKER_MENU_POINTER_OFFSET = [9, -9, -18, 18];
+SC.PickerPane.HUGE_PICKER_MENU_EXTRA_RIGHT_OFFSET = 12;

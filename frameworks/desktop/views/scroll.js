@@ -1387,16 +1387,25 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     frame to be notified whenever it's size changes.
   */
   contentViewDidChange: function() {
-    var newView = this.get('contentView'), oldView = this._scroll_contentView;
-    var f = this.contentViewFrameDidChange ;
+    var newView = this.get('contentView'),
+        oldView = this._scroll_contentView,
+        frameObserver = this.contentViewFrameDidChange,
+        layerObserver = this.contentViewLayerDidChange;
+
     if (newView !== oldView) {
       
       // stop observing old content view
-      if (oldView) oldView.removeObserver('frame', this, f);
+      if (oldView) {
+        oldView.removeObserver('frame', this, frameObserver);
+        oldView.removeObserver('layer', this, layerObserver);
+      }
       
       // update cache
       this._scroll_contentView = newView;
-      if (newView) newView.addObserver('frame', this, f);
+      if (newView) {
+        newView.addObserver('frame', this, frameObserver);
+        newView.addObserver('layer', this, layerObserver);
+      }
       
       // replace container
       this.containerView.set('contentView', newView);
@@ -1489,6 +1498,17 @@ SC.ScrollView = SC.View.extend(SC.Border, {
   },
 
   /** @private
+    If the layer of the content view changes, we need to readjust the
+    scrollTop and scrollLeft properties on the new DOM element.
+  */
+  contentViewLayerDidChange: function() {
+    // Invalidate these cached values, as they're no longer valid
+    if (this._verticalScrollOffset !== 0) this._verticalScrollOffset = -1;
+    if (this._horizontalScrollOffset !== 0) this._horizontalScrollOffset = -1;
+    this.invokeLast(this.adjustElementScroll);
+  },
+
+  /** @private
     Whenever the horizontal scroll offset changes, update the scrollers and 
     edit the location of the contentView.
   */
@@ -1503,7 +1523,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
   _scroll_verticalScrollOffsetDidChange: function() {
     this.invokeLast(this.adjustElementScroll);
   }.observes('verticalScrollOffset'),
-  
+
   /** @private
     Called at the end of the run loop to actually adjust the scrollTop
     and scrollLeft properties of the container view.

@@ -938,6 +938,7 @@ SC.CollectionView = SC.View.extend(
       //this.replaceAllChildren(views);
       containerView.beginPropertyChanges();
       // views = containerView.get('views');
+      if (this.willRemoveAllChildren) this.willRemoveAllChildren() ;
       containerView.destroyLayer().removeAllChildren();
       
       // For all previous views that can be re-used, return them to the pool.
@@ -2074,7 +2075,8 @@ SC.CollectionView = SC.View.extend(
     var itemView      = this.itemViewForEvent(ev),
         content       = this.get('content'),
         contentIndex  = itemView ? itemView.get('contentIndex') : -1, 
-        info, anchor ;
+        info, anchor,
+        allowsMultipleSel = content.get('allowsMultipleSelection');
         
     info = this.mouseDownInfo = {
       event:        ev,  
@@ -2100,6 +2102,7 @@ SC.CollectionView = SC.View.extend(
     isSelected = sel ? sel.contains(contentIndex) : NO;
     info.modifierKeyPressed = modifierKeyPressed = ev.ctrlKey || ev.metaKey ;
     
+    
     // holding down a modifier key while clicking a selected item should 
     // deselect that item...deselect and bail.
     if (modifierKeyPressed && isSelected) {
@@ -2107,7 +2110,7 @@ SC.CollectionView = SC.View.extend(
 
     // if the shiftKey was pressed, then we want to extend the selection
     // from the last selected item
-    } else if (ev.shiftKey && sel && sel.get('length') > 0) {
+    } else if (ev.shiftKey && sel && sel.get('length') > 0 && allowsMultipleSel) {
       sel = this._findSelectionExtendedByShift(sel, contentIndex);
       anchor = this._selectionAnchor ; 
       this.select(sel) ;
@@ -2121,6 +2124,11 @@ SC.CollectionView = SC.View.extend(
     // Otherwise, if selecting on mouse down,  simply select the clicked on 
     // item, adding it to the current selection if a modifier key was pressed.
     } else {
+    
+      if((ev.shiftKey || modifierKeyPressed) && !allowsMultipleSel){
+        this.select(null, false);
+      }
+    
       if (this.get("selectOnMouseDown")) {
         this.select(contentIndex, modifierKeyPressed);
       } else {

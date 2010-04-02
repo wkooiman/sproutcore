@@ -7,6 +7,8 @@
 
 require('system/ready');
 
+SC.LOG_TOUCH_EVENTS = YES;
+
 /** @class
 
   The RootResponder captures events coming from a web browser and routes them 
@@ -106,7 +108,42 @@ SC.RootResponder = SC.Object.extend({
     this.endPropertyChanges() ;
     return this ;
   }, 
-  
+
+  // ..........................................................
+  // MENU PANE
+  //
+
+  /**
+    The current menu pane. This pane receives keyboard events before all other
+    panes, but tends to be transient, as it is only set when a pane is open.
+
+    @property {SC.MenuPane}
+  */
+  menuPane: null,
+
+  /**
+    Sets a pane as the menu pane. All key events will be directed to this
+    pane, but the current key pane will not lose focus.
+
+    @param {SC.MenuPane} pane
+    @returns {SC.RootResponder} receiver
+  */
+  makeMenuPane: function(pane) {
+    // Does the specified pane accept being the menu pane?  If not, there's
+    // nothing to do.
+    if (pane  &&  !pane.get('acceptsMenuPane')) {
+      return this;
+    }
+    else {
+      var currentMenu = this.get('menuPane');
+      if (currentMenu === pane) return this; // nothing to do
+
+      this.set('menuPane', pane);
+    }
+
+    return this;
+  },
+
   // .......................................................
   // KEY ROOT VIEW
   // 
@@ -259,7 +296,7 @@ SC.RootResponder = SC.Object.extend({
       target = target.get('firstResponder') || target;
       do {
         if (target.respondsTo(methodName)) return target ;
-      } while (target = target.get('nextResponder')) ;
+      } while ((target = target.get('nextResponder'))) ;
     }
 
     // HACK: Eventually we need to normalize the sendAction() method between
@@ -381,12 +418,12 @@ SC.RootResponder = SC.Object.extend({
   */
   sendEvent: function(action, evt, target) {
     var pane, ret ;
-     
+
     SC.RunLoop.begin() ;
     
     // get the target pane
     if (target) pane = target.get('pane') ;
-    else pane = this.get('keyPane') || this.get('mainPane') ;
+    else pane = this.get('menuPane') || this.get('keyPane') || this.get('mainPane') ;
     
     // if we found a valid pane, send the event to it
     ret = (pane) ? pane.sendEvent(action, evt, target) : null ;
@@ -429,22 +466,7 @@ SC.RootResponder = SC.Object.extend({
   */
   setup: function() {
     this.listenFor('touchstart touchmove touchend touchcancel'.w(), document);
-    
-    if (NO && SC.browser.touch) {
-      var elem = document.createElement('div');
-      elem.id = 'sc-touch-intercept';
-      elem.style.position = 'absolute';
-      elem.style.top = '0px';
-      elem.style.left = '0px';
-      elem.style.bottom = '0px';
-      elem.style.right = '0px';
-      elem.style.zIndex = 999;
-      elem.style.webkitUserSelect = "none";
 
-      document.body.appendChild(elem);
-      this._touchInterceptElement = elem;
-      elem = null;
-    }
   },
   
   // ................................................................................
@@ -707,6 +729,9 @@ SC.RootResponder = SC.Object.extend({
     var target = touch.targetView, view = target,
         chain = [], idx, len;
     
+    if (SC.LOG_TOUCH_EVENTS) {
+      SC.Logger.info('  -- Received one touch on %@'.fmt(target.toString()));
+    }
     // work up the chain until we get the root
     while (view && (view !== startingPoint)) {
       chain.push(view);
@@ -716,9 +741,14 @@ SC.RootResponder = SC.Object.extend({
     // work down the chain
     for (len = chain.length, idx = 0; idx < len; idx++) {
       view = chain[idx];
-      
+      SC.Logger.info('  -- Checking %@ for captureTouch response…'.fmt(view.toString()));
+
       // see if it captured the touch
       if (view.tryToPerform('captureTouch', touch)) {
+        if (SC.LOG_TOUCH_EVENTS) {
+          SC.Logger.info('   -- Making %@ touch responder because it returns YES to captureTouch'.fmt(view.toString())); 
+        }
+        
         // if so, make it the touch's responder
         this.makeTouchResponder(touch, view, shouldStack); // triggers touchStart/Cancel/etc. event.
         return; // and that's all we need
@@ -731,9 +761,14 @@ SC.RootResponder = SC.Object.extend({
     this.makeTouchResponder(touch, target, shouldStack);
   },
 
-  /**
-    Triggers touchStart on views.
+  /** @private
+    Called when the user touches their finger to the screen. This method
+    dispatches the touchstart event to the appropriate view.
     
+    We may receive a touchstart event for each touch, or we may receive a
+    single touchstart event with multiple touches, so we may have to dispatch
+    events to multiple views.
+
     @param {Event} evt the event
     @returns {Boolean}
   */
@@ -745,17 +780,18 @@ SC.RootResponder = SC.Object.extend({
       
       // prepare event for touch mapping.
       evt.touchContext = this;
-      
-      // each touch
+
+      // Loop through each touch we received in this event
       for (idx = 0; idx < len; idx++) {
         touch = touches[idx];
 
-        
-        // prepare a touch entry (our internal representation)
+        // Create an SC.Touch instance for every touch.
         touchEntry = SC.Touch.create(touch, this);
         touchEntry.timeStamp = evt.timeStamp;
-        
-        // map touch
+
+        // Store the SC.Touch object. We use the identifier property (provided
+        // by the browser) to disambiguate between touches. These will be used
+        // later to determine if the touches have changed.
         this._touches[touch.identifier] = touchEntry;
         
         // set the event (so default action, etc. can be stopped)
@@ -766,9 +802,8 @@ SC.RootResponder = SC.Object.extend({
         // We send the touchEntry because it is cached (we add the helpers only once)
         this.captureTouch(touchEntry, this);
         
-        // and, unset
+        // Unset the reference to the original event so we can garbage collect.
         touch.event = null;
-        
       }
     } catch (e) {
       SC.Logger.warn('Exception during touchStart: %@'.fmt(e)) ;
@@ -904,7 +939,6 @@ SC.RootResponder = SC.Object.extend({
       }
     } catch (e) {
       SC.Logger.warn('Exception during touchEnd: %@'.fmt(e)) ;
-      this._touchViews = null ;
       SC.RunLoop.end();
       return NO ;
     }
@@ -946,7 +980,15 @@ SC.Touch = function(touch, touchContext) {
 
 SC.Touch.prototype = {
   /**@scope SC.Touch.prototype*/
-  
+
+  /**
+    Indicates that you want to allow the normal default behavior.  Sets
+    the hasCustomEventHandling property to YES but does not cancel the event.
+  */
+  allowDefault: function() {
+    this.hasCustomEventHandling = YES ;
+  },
+
   /**
     If the touch is associated with an event, prevents default action on the event.
   */

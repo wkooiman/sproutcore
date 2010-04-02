@@ -90,7 +90,7 @@ SC.TABBING_ONLY_INSIDE_DOCUMENT = YES;
   This will enable touch events to be routed into mouse events. 
   It is enabled by default.
 */
-SC.ROUTE_TOUCH = YES;
+SC.ROUTE_TOUCH = NO;
 
 
 /** @private - custom array used for child views */
@@ -295,6 +295,15 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     return ret ;
   }.property('parentView', 'isEnabled'),
   
+  /**
+    Observer that resigns firstResponder if the view is Disabled and is first
+    responder. This will avoid cases like disabled view with focus rings.
+  */
+  isEnabledObserver: function(){
+    if(!this.get('isEnabled') && this.get('isFirstResponder')){
+      this.resignFirstResponder();
+    } 
+  }.observes('isEnabled'),
   
   // ..........................................................
   // MULTITOUCH SUPPORT
@@ -399,7 +408,9 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
       
       // if we were firstResponder, resign firstResponder also if no longer
       // visible.
-      if (!cur && this.get('isFirstResponder')) this.resignFirstResponder();
+      if (!cur && this.get('isFirstResponder')) {
+        this.resignFirstResponder();
+      }
       
     // }
     return this ;
@@ -480,7 +491,6 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     if (view.parentView !== this) {
       throw "%@.removeChild(%@) must belong to parent".fmt(this,view);
     }
-    
     // notify views
     if (view.willRemoveFromParent) view.willRemoveFromParent() ;
     if (this.willRemoveChild) this.willRemoveChild(view) ;
@@ -766,6 +776,20 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     }
     
     return elem;
+  },
+  
+  /**
+    Returns YES if the receiver is a subview of a given view or if it’s 
+    identical to that view. Otherwise, it returns NO.
+    
+    @property {SC.View} view
+  */
+  isDescendantOf: function(view) {
+    var parentView = this.get('parentView');
+    
+    if(this===view) return YES;
+    else if(parentView) return parentView.isDescendantOf(view);
+    else return NO;
   },
   
   /**
@@ -1119,6 +1143,7 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     if (!this.get('isEnabled')) classArray.push('disabled') ;
     if (!this.get('isVisible')) classArray.push('hidden') ;
     if (this.get('isFirstResponder')) classArray.push('focus');
+    if (this.get('hasStaticLayout') && this.get('useStaticLayout')) classArray.push('sc-static-layout');
 
     bgcolor = this.get('backgroundColor');
     if (bgcolor) context.addStyle('backgroundColor', bgcolor);
@@ -1164,6 +1189,7 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     if (!this.get('isEnabled')) classSet["disabled"] = YES;
     if (!this.get('isVisible')) classSet["hidden"] = YES;
     if (this.get('isFirstResponder')) classSet["focus"] = YES;
+    if (this.get('hasStaticLayout') && this.get('useStaticLayout')) classSet["sc-static-layout"] = YES;
     
     bgcolor = this.get('backgroundColor');
     if (bgcolor) q.css('backgroundColor', bgcolor);
@@ -1269,18 +1295,18 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     @param {SC.RenderContext} context the render context
     @param {Boolean} firstTime YES if this is creating a layer
     @returns {void}
-  */
+  */   
   render: function(context, firstTime) {
-    if (this.createRenderer) {
-      if (firstTime) { 
-        if (this.renderer) this.renderer.render(context);
+      if (this.createRenderer) {
+        if (firstTime) { 
+          if (this.renderer) this.renderer.render(context);
+        } else {
+          if (this.renderer) this.renderer.update();
+        }
       } else {
-        if (this.renderer) this.renderer.update();
+        if (firstTime) this.renderChildViews(context, firstTime);
       }
-    } else {
-      if (firstTime) this.renderChildViews(context, firstTime);
-    }
-  },
+    },
   
   
   /** @private - 
@@ -1608,16 +1634,19 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     @type SC.View
   */
   nextValidKeyView: function() {
-    var seen = [],
-        rootView = this.pane(), ret; 
-    ret = rootView._computeNextValidKeyView(this, seen);
-    if(SC.TABBING_ONLY_IN_DOCUMENT && SC.ret === null){
+    var seen = [], 
+        rootView = this.pane(), ret = this.get('nextKeyView');
+    
+    if(!ret) ret = rootView._computeNextValidKeyView(this, seen);
+    
+    if(SC.TABBING_ONLY_INSIDE_DOCUMENT && !ret) {
       ret = rootView._computeNextValidKeyView(rootView, seen);
     }
+    
     return ret ;
   }.property('nextKeyView'),
   
-  _computeNextValidKeyView: function(currentView, seen) {  
+  _computeNextValidKeyView: function(currentView, seen) {
     var ret = this.get('nextKeyView'),
         children, i, childLen, child;
     if(this !== currentView && seen.indexOf(currentView)!=-1 && 
@@ -1629,7 +1658,7 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     // find next sibling
     if (!ret) {
       children = this.get('childViews');
-      for(i=0, childLen= children.length; i<childLen; i++){
+      for(i=0, childLen = children.length; i<childLen; i++){
         child = children[i];
         if(child.get('isVisibleInWindow') && child.get('isVisible')){
           ret = child._computeNextValidKeyView(currentView, seen);
@@ -1657,8 +1686,8 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
   */
   previousValidKeyView: function() {
     var seen = [],
-        rootView = this.pane(), ret; 
-    ret = rootView._computePreviousValidKeyView(this, seen);
+        rootView = this.pane(), ret = this.get('previousKeyView'); 
+    if(!ret) ret = rootView._computePreviousValidKeyView(this, seen);
     return ret ;
   }.property('previousKeyView'),
   
@@ -1795,8 +1824,6 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
   */
   destroy: function() {
     if (this.get('isDestroyed')) return this; // nothing to do
-     
-    sc_super();
     
     // remove from parent if found
     this.removeFromParent() ;
@@ -1807,6 +1834,9 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     
     // unregister for autoscroll during drags
     if (this.get('isScrollable')) SC.Drag.removeScrollableView(this) ;
+    
+    //Do generic destroy. It takes care of mixins and sets isDestroyed to YES.
+    sc_super();
     return this; // done with cleanup
   },
   
@@ -1821,7 +1851,7 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     var childViews = this.get('childViews'), len = childViews.length, idx ;
     if (len) {
       childViews = childViews.slice() ;
-      for (idx=0; idx<len; ++idx) childViews[idx]._destroy() ;
+      for (idx=0; idx<len; ++idx) childViews[idx].destroy() ;
     }
     
     // next remove view from global hash
@@ -1829,8 +1859,6 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     delete this._CQ ; 
     delete this.page ;
     
-    // mark as destroyed so we don't do this again
-    this.set('isDestroyed', YES) ;
     return this ;
   },
   
@@ -2600,14 +2628,14 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
       ret.left = "50%";
       if(lW && SC.isPercentage(lW)) ret.width = (lW*100)+"%" ; //percentage width
       else ret.width = Math.floor(lW || 0) ;
-      if(lW && SC.isPercentage(lW) && lcX >= 0 && lcX < 1){
+      if(lW && SC.isPercentage(lW) && (SC.isPercentage(lcX) || SC.isPercentage(lcX*-1))){
         ret.marginLeft = Math.floor((lcX - lW/2)*100)+"%" ;
-      }else if(lW && lW > 1 && (lcX >= 1 || lcX <= 0)){
+      }else if(lW && lW >= 1 && !SC.isPercentage(lcX)){
         ret.marginLeft = Math.floor(lcX - ret.width/2) ;
       }else {
         // This error message happens whenever width is not set.
-        // console.error("You have to set width and centerX usign both percentages or pixels");
-        ret.marginLeft = 0;
+        console.warn("You have to set width and centerX usign both percentages or pixels");
+        ret.marginLeft = "50%";
       }
       ret.right = null ;
     
@@ -2674,15 +2702,14 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
       if(lH && SC.isPercentage(lH)) ret.height = (lH*100)+ "%" ;
       else ret.height = Math.floor(lH || 0) ;
       
-      if(lH && SC.isPercentage(lH) && lcY >= 0 && lcY < 1){
+      if(lH && SC.isPercentage(lH) && (SC.isPercentage(lcY) || SC.isPercentage(lcY*-1))){ //height is percentage and lcy too
         ret.marginTop = Math.floor((lcY - lH/2)*100)+"%" ;
-      }else if(lH && lH > 1 && (lcY >= 1 || lcY <= 0)){
+      }else if(lH && lH >= 1 && !SC.isPercentage(lcY)){
         ret.marginTop = Math.floor(lcY - ret.height/2) ;
       }else {
-        console.error("You have to set height and centerY to use both percentages or pixels");
-        ret.marginTop = 0;
+        console.warn("You have to set height and centerY to use both percentages or pixels");
+        ret.marginTop = "50%";
       }
-    
     } else if (!SC.none(lH)) {
       ret.top = 0;
       ret.bottom = null;

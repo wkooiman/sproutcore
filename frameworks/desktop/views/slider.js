@@ -139,6 +139,31 @@ SC.SliderView = SC.View.extend(SC.Control,
     return ret ;
   },
   
+  mouseWheel: function(evt) {
+    if (!this.get('isEnabled')) return YES;
+    var min = this.get('minimum'),
+        max = this.get('maximum'),
+        newVal = this.get('value')+((evt.wheelDeltaX+evt.wheelDeltaY)*0.01),
+        step = this.get('step'),
+        value = Math.round(newVal / step) * step ;
+    if (newVal< min) this.setIfChanged('value', min);
+    else if (newVal> max) this.setIfChanged('value', max);
+    else this.setIfChanged('value', newVal);
+    return YES ;  
+  },
+  
+  touchStart: function(evt){
+    return this.mouseDown(evt);
+  },
+  
+  touchEnd: function(evt){
+    return this.mouseUp(evt);
+  },
+  
+  touchDragged: function(evt){
+    return this.mouseDragged(evt);
+  },
+  
   /** @private
     Updates the handle based on the mouse location of the handle in the
     event.

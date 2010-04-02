@@ -5,7 +5,7 @@
 // License:   Licensed under MIT license (see license.js)
 // ==========================================================================
 
-var view, content, pane ;
+var view, content, contentController, pane ;
 
 module("SC.CollectionView Mouse Events", {
   setup: function() {
@@ -16,8 +16,13 @@ module("SC.CollectionView Mouse Events", {
       return SC.Object.create({ value: x });
     });
     
+    contentController = SC.ArrayController.create({
+      content: content,
+      allowsMultipleSelection: YES
+    });
+
     view = SC.CollectionView.create({
-      content: content, 
+      content: contentController,
 
       layout: { top: 0, left: 0, width: 300, height: 500 },
       
@@ -128,10 +133,10 @@ test("clicking on an item should select it", function() {
   clickOn(view, 3, NO, NO, selectionFromIndex(3));
 });
 
-test("clicking on a selected item should clear selection after 301ms and reselect it", function() {
+test("clicking on a selected item should clear selection after 300ms and reselect it", function() {
   view.select(SC.IndexSet.create(1,5));
   SC.RootResponder.responder._lastMouseUpAt = null ; // HACK: don't want a doubleClick from previous tests
-  clickOn(view, 3, NO, NO, selectionFromIndex(3), 301);
+  clickOn(view, 3, NO, NO, selectionFromIndex(3), 500);
 });
 
 test("clicking on unselected item should clear selection and select it", function() {

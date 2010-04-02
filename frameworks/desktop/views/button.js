@@ -56,6 +56,7 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
   classNames: ['sc-button-view'],
   
   /**
+    This property used to be called theme. We changed it now 
     optionally set this to the theme you want this button to have.  
     
     This is used to determine the type of button this is.  You generally 
@@ -67,7 +68,7 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
     
     @property {String}
   */
-  theme: 'square',
+  controlStyle: 'square',
   
   /**
     Optionally set the behavioral mode of this button.  
@@ -208,13 +209,11 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
 
   /** @private - save keyEquivalent for later use */
   init: function() {
-    if (
-        this.theme && 
-        (this.theme === "square" || this.theme === "capsule" || this.theme === "checkbox" || this.theme === "radio")
-      ) {
-      this.set("oldButtonTheme", this.theme);
-      this.theme = "";
-    }
+    //Add to the classNames array the controlStyle
+    var classnames = SC.clone(this.get('classNames'));
+    classnames.push(this.get('controlStyle'));
+    this.set('classNames', classnames);
+    
     sc_super();
     
     //cache the key equivalent
@@ -241,7 +240,9 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
     Creates the button view's renderer.
   */
   createRenderer: function(theme) {
-    var ret = theme.button();
+    var ret, style = this.get('renderStyle');
+    if (style==="renderDefault") ret = theme.button();
+    if (style==="renderImage") ret = theme.imageButton();
     this.updateRenderer(ret); // updating looks _exactly_ like normal stuff for us.
     return ret;
   },
@@ -262,21 +263,10 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
       
       title: this.get("displayTitle"),
       escapeHTML: this.get("escapeHTML"),
-      needsEllipsis: this.get("needsEllipsis"),
-      
-      oldButtonTheme: this.get("oldButtonTheme")
+      needsEllipsis: this.get("needsEllipsis")
     });
   },
   
-  /**
-    Render the button with the image render style. To set image 
-    set the icon property with the classname that has the style with the image
-  */
-  renderImage: function(context, firstTime){
-    var icon = this.get('icon');
-    if(icon) context.push("<div class='img "+icon+"'></div>");
-    else context.push("<div class='img'></div>");
-  },
   
   /** @private {String} used to store a previously defined key equiv */
   _defaultKeyEquivalent: null,
@@ -331,7 +321,9 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
     Remove the active class on mouseOut if mouse is down.
   */  
   mouseExited: function(evt) {
-    if (this._isMouseDown) this.set('isActive', NO);
+    if (this._isMouseDown) {
+      this.set('isActive', NO);
+    }
     return YES;
   },
 
@@ -339,7 +331,9 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
     If mouse was down and we renter the button area, set the active state again.
   */  
   mouseEntered: function(evt) {
-    this.set('isActive', this._isMouseDown);
+    if (this._isMouseDown) {
+      this.set('isActive', YES);
+    }
     return YES;
   },
 
@@ -567,12 +561,18 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
   },
   
   didAppendToDocument: function() {
-    if(SC.browser.msie===7){
-      var elem = this.$();
-      if(elem && elem[0]){
-        var w = elem[0].clientWidth,
-        padding = parseInt(elem.css('paddingRight'),0);
-        this.$('.sc-button-label').css('minWidth', w-(padding*2)+'px');
+   if(parseInt(SC.browser.msie, 0)===7){
+      var layout = this.get('layout');
+      if(this.get('useStaticLayout') && layout.width && 
+        (layout.width.indexOf && layout.width.indexOf('auto')!=-1)){
+        var elem = this.$();
+        if(elem && elem[0]){
+          var w = elem[0].clientWidth;
+          if(w!==0){
+            var padding = parseInt(elem.css('paddingRight'),0);
+            this.$('.sc-button-label').css('minWidth', w-(padding*2)+'px');
+          }
+        }
       }
     }
   }
