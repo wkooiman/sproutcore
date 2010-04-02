@@ -178,13 +178,6 @@ SC.SelectView = SC.ButtonView.extend(
   _defaultIcon: null,
 
   /**
-    @private
-
-    The button theme will be popup
-  */
-  theme: 'popup',
-
-  /**
     Render method gets triggered when these properties change
 
     @property
