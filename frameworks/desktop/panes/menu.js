@@ -7,15 +7,6 @@
 require('panes/picker');
 require('views/menu_item');
 
-
-/** 
-  Default heights for menu items.
-*/
-if (!SC.DEFAULT_MENU_ITEM_HEIGHT)           SC.DEFAULT_MENU_ITEM_HEIGHT           = 20;
-if (!SC.DEFAULT_MENU_ITEM_SEPARATOR_HEIGHT) SC.DEFAULT_MENU_ITEM_SEPARATOR_HEIGHT = 9;
-if (!SC.DEFAULT_MENU_HEIGHT_PADDING)        SC.DEFAULT_MENU_HEIGHT_PADDING        = 0;
-
-
 /**
   @class
 
@@ -68,6 +59,7 @@ if (!SC.DEFAULT_MENU_HEIGHT_PADDING)        SC.DEFAULT_MENU_HEIGHT_PADDING      
   @extends SC.PickerPane
   @since SproutCore 1.0
 */
+
 SC.MenuPane = SC.PickerPane.extend(
 /** @scope SC.MenuPane.prototype */ {
 
@@ -88,25 +80,52 @@ SC.MenuPane = SC.PickerPane.extend(
   items: [],
 
   /**
-    The default height for each menu item, in pixels.
+    The size of the menu. This will set a CSS style on the menu that can be
+    used by the current theme to style the appearance of the control. This
+    value will also determine the default itemHeight, itemSeparatorHeight,
+    menuHeightPadding, and submenuOffsetX if you don't explicitly set these
+    properties.
 
-    You can override this on a per-item basis by setting the (by default) @height@ property on your object.
+    Your theme can override the default values for each control size. For
+    example, to set the height of menu items for small menus, you could set
+    {{{
+      SC.MenuPane.SMALL_MENU_ITEM_HEIGHT = 10;
+    }}}
 
-    @type Number
-    @default SC.DEFAULT_MENU_ITEM_HEIGHT
+    Changing the controlSize once the menu is instantiated has no effect.
+
+    @type String
+    @default SC.REGULAR_CONTROL_SIZE
   */
-  itemHeight: SC.DEFAULT_MENU_ITEM_HEIGHT,
+  controlSize: SC.REGULAR_CONTROL_SIZE,
 
   /**
-    The default height for separator menu items.
+    The height of each menu item, in pixels.
 
     You can override this on a per-item basis by setting the (by default)
     @height@ property on your object.
 
+    If you don't specify a value, the item height will be inferred from
+    controlSize.
+
     @type Number
-    @default SC.DEFAULT_MENU_ITEM_SEPARATOR_HEIGHT
+    @default null
   */
-  itemSeparatorHeight: SC.DEFAULT_MENU_ITEM_SEPARATOR_HEIGHT,
+  itemHeight: null,
+
+  /**
+    The height of separator menu items.
+
+    You can override this on a per-item basis by setting the (by default)
+    @height@ property on your object.
+
+    If you don't specify a value, the height of the separator menu items will
+    be inferred from controlSize.
+
+    @type Number
+    @default null
+  */
+  itemSeparatorHeight: null,
 
   /**
     The height of the menu pane.  This is updated every time menuItemViews
@@ -124,10 +143,24 @@ SC.MenuPane = SC.PickerPane.extend(
     added to the height of the menu, such that a space between the top and the
     bottom is created.
 
+    If you don't specify a value, the padding will be inferred from the
+    controlSize.
+
     @type Number
-    @default SC.DEFAULT_MENU_HEIGHT_PADDING
+    @default null
   */
-  menuHeightPadding: SC.DEFAULT_MENU_HEIGHT_PADDING,
+  menuHeightPadding: null,
+
+  /**
+    The amount of offset x while positioning submenu.
+
+    If you don't specify a value, the padding will be inferred from the
+    controlSize.
+
+    @type Number
+    @default null
+  */
+  submenuOffsetX: null,
 
   /**
     The last menu item to be selected by the user.
@@ -180,6 +213,17 @@ SC.MenuPane = SC.PickerPane.extend(
     @default YES
   */
   localize: YES,
+  
+  /**
+    Whether or not this menu pane should accept the “current menu pane”
+    designation when visible, which is the highest-priority pane when routing
+    events.  Generally you want this set to YES so that your menu pane can
+    intercept keyboard events.
+
+    @type Boolean
+    @default YES
+  */
+  acceptsMenuPane: YES,
 
   // ..........................................................
   // METHODS
@@ -207,7 +251,6 @@ SC.MenuPane = SC.PickerPane.extend(
     this.beginPropertyChanges();
     this.set('anchorElement',anchor) ;
     this.set('anchor',anchorViewOrElement);
-    this.set('preferType',SC.PICKER_MENU) ;
     if (preferMatrix) this.set('preferMatrix',preferMatrix) ;
 
     this.endPropertyChanges();
@@ -218,7 +261,16 @@ SC.MenuPane = SC.PickerPane.extend(
     // pane's defaultResponder to itself. This way key events can be
     // interpreted in keyUp.
     this.set('defaultResponder', this);
-    this.append();
+
+    // IE7 has a bug where, intermittently, appending a menu pane will cause
+    // the other panes to blank out, until the user interacts with the window.
+    // If we wait until the end of the RunLoop to append the pane, IE redraws
+    // correctly.
+    if (parseInt(SC.browser.msie, 0)===7) {
+      this.invokeLast(this.append);
+    } else {
+      this.append();
+    }
   },
 
   /**
@@ -227,9 +279,16 @@ SC.MenuPane = SC.PickerPane.extend(
     @returns {SC.MenuPane} receiver
   */
   remove: function() {
+    var parentMenu = this.get('parentMenu');
+
     this.set('currentMenuItem', null);
     this.closeOpenMenus();
-    this.resignKeyPane();
+    this.resignMenuPane();
+
+    if (parentMenu) {
+      parentMenu.becomeMenuPane();
+    }
+
     return sc_super();
   },
 
@@ -383,7 +442,7 @@ SC.MenuPane = SC.PickerPane.extend(
     @isReadOnly
     @property Array
   */
-  menuItemKeys: 'itemTitleKey itemValueKey itemIsEnabledKey itemIconKey itemSeparatorKey itemActionKey itemCheckboxKey itemShortCutKey itemBranchKey itemHeightKey subMenuKey itemKeyEquivalentKey itemTargetKey'.w(),
+  menuItemKeys: 'itemTitleKey itemValueKey itemIsEnabledKey itemIconKey itemSeparatorKey itemActionKey itemCheckboxKey itemShortCutKey itemBranchKey itemHeightKey itemSubMenuKey itemKeyEquivalentKey itemTargetKey'.w(),
 
   // ..........................................................
   // INTERNAL PROPERTIES
@@ -416,6 +475,76 @@ SC.MenuPane = SC.PickerPane.extend(
   //
 
   /**
+    If an itemHeight, itemSeparatorHeight, or menuHeightPadding have not been
+    explicitly set, we set them here based on the controlSize.
+
+    @returns {SC.MenuPane} the newly instantiated menu pane
+    @private
+  */
+  init: function() {
+    switch (this.get('controlSize')) {
+      case SC.TINY_CONTROL_SIZE:
+        this.setIfNull('itemHeight', SC.MenuPane.TINY_MENU_ITEM_HEIGHT);
+        this.setIfNull('itemSeparatorHeight', SC.MenuPane.TINY_MENU_ITEM_SEPARATOR_HEIGHT);
+        this.setIfNull('menuHeightPadding', SC.MenuPane.TINY_MENU_HEIGHT_PADDING);
+        this.setIfNull('submenuOffsetX', SC.MenuPane.TINY_SUBMENU_OFFSET_X);
+        break;
+      case SC.SMALL_CONTROL_SIZE:
+        this.setIfNull('itemHeight', SC.MenuPane.SMALL_MENU_ITEM_HEIGHT);
+        this.setIfNull('itemSeparatorHeight', SC.MenuPane.SMALL_MENU_ITEM_SEPARATOR_HEIGHT);
+        this.setIfNull('menuHeightPadding', SC.MenuPane.SMALL_MENU_HEIGHT_PADDING);
+        this.setIfNull('submenuOffsetX', SC.MenuPane.SMALL_SUBMENU_OFFSET_X);
+        break;
+      case SC.REGULAR_CONTROL_SIZE:
+        this.setIfNull('itemHeight', SC.MenuPane.REGULAR_MENU_ITEM_HEIGHT);
+        this.setIfNull('itemSeparatorHeight', SC.MenuPane.REGULAR_MENU_ITEM_SEPARATOR_HEIGHT);
+        this.setIfNull('menuHeightPadding', SC.MenuPane.REGULAR_MENU_HEIGHT_PADDING);
+        this.setIfNull('submenuOffsetX', SC.MenuPane.REGULAR_SUBMENU_OFFSET_X);
+        break;
+      case SC.LARGE_CONTROL_SIZE:
+        this.setIfNull('itemHeight', SC.MenuPane.LARGE_MENU_ITEM_HEIGHT);
+        this.setIfNull('itemSeparatorHeight', SC.MenuPane.LARGE_MENU_ITEM_SEPARATOR_HEIGHT);
+        this.setIfNull('menuHeightPadding', SC.MenuPane.LARGE_MENU_HEIGHT_PADDING);
+        this.setIfNull('submenuOffsetX', SC.MenuPane.LARGE_SUBMENU_OFFSET_X);
+        break;
+      case SC.HUGE_CONTROL_SIZE:
+        this.setIfNull('itemHeight', SC.MenuPane.HUGE_MENU_ITEM_HEIGHT);
+        this.setIfNull('itemSeparatorHeight', SC.MenuPane.HUGE_MENU_ITEM_SEPARATOR_HEIGHT);
+        this.setIfNull('menuHeightPadding', SC.MenuPane.HUGE_MENU_HEIGHT_PADDING);
+        this.setIfNull('submenuOffsetX', SC.MenuPane.HUGE_SUBMENU_OFFSET_X);
+        break;
+    }
+
+    return sc_super();
+  },
+
+  /**
+    Helper method that only sets a property if it is null.
+
+    @param {String} key the property to set
+    @param {Object} value
+    @private
+  */
+  setIfNull: function(key, value) {
+    if (this.get(key) === null) {
+      this.set(key, value);
+    }
+  },
+
+  /** @private
+    The render method is responsible for adding the control size class
+    name to the menu pane.
+
+    @param {SC.RenderContext} context the render context
+    @param {Boolean} firstTime YES if this is creating a layer
+  */
+  render: function(context, firstTime) {
+    context.addClass(this.get('controlSize'));
+
+    return sc_super();
+  },
+
+  /**
     Creates the child scroll view, and sets its contentView to a new
     view.  This new view is saved and managed by the SC.MenuPane,
     and contains the visible menu items.
@@ -427,7 +556,8 @@ SC.MenuPane = SC.PickerPane.extend(
     var scroll, menuView, menuItemViews;
 
     scroll = this.createChildView(SC.MenuScrollView, {
-      borderStyle: SC.BORDER_NONE
+      borderStyle: SC.BORDER_NONE,
+      controlSize: this.get('controlSize')
     });
 
     menuView = this._menuView = SC.View.create();
@@ -439,6 +569,58 @@ SC.MenuPane = SC.PickerPane.extend(
     this.childViews = [scroll];
 
     return this;
+  },
+
+  /**
+    When the pane is attached to a DOM element in the window, set up the
+    view to be visible in the window and register with the RootResponder.
+
+    We don't call sc_super() here because PanelPane sets the current pane to
+    be the key pane when attached.
+
+    @returns {SC.MenuPane} receiver
+  */
+  paneDidAttach: function() {
+    // hook into root responder
+    var responder = (this.rootResponder = SC.RootResponder.responder);
+    responder.panes.add(this);
+
+    // set currentWindowSize
+    this.set('currentWindowSize', responder.computeWindowSize()) ;
+
+    // update my own location
+    this.set('isPaneAttached', YES) ;
+    this.parentViewDidChange() ;
+
+    //notify that the layers have been appended to the document
+    this._notifyDidAppendToDocument();
+
+    this.becomeMenuPane();
+
+    return this ;
+  },
+
+  /**
+    Make the pane the menu pane. When you call this, all key events will
+    temporarily be routed to this pane. Make sure that you call
+    resignMenuPane; otherwise all key events will be blocked to other panes.
+
+    @returns {SC.Pane} receiver
+  */
+  becomeMenuPane: function() {
+    if (this.rootResponder) this.rootResponder.makeMenuPane(this) ;
+    return this ;
+  },
+
+  /**
+    Remove the menu pane status from the pane.  This will simply set the 
+    menuPane on the rootResponder to null.
+
+    @returns {SC.Pane} receiver
+  */
+  resignMenuPane: function() {
+    if (this.rootResponder) this.rootResponder.makeMenuPane(null);
+    return this ;
   },
 
   /**
@@ -675,7 +857,8 @@ SC.MenuPane = SC.PickerPane.extend(
 
   _sc_menu_currentMenuItemDidChange: function() {
     var currentMenuItem = this.get('currentMenuItem'),
-        previousMenuItem = this.get('previousMenuItem');
+        previousMenuItem = this.get('previousMenuItem'),
+        scrollView, scrollOffset, height, itemTop;
 
     if (previousMenuItem) {
       if (previousMenuItem.get('hasSubMenu') && currentMenuItem === null) {
@@ -687,7 +870,19 @@ SC.MenuPane = SC.PickerPane.extend(
     }
 
     if (currentMenuItem && currentMenuItem.get('isEnabled') && !currentMenuItem.get('isSeparator')) {
-     currentMenuItem.becomeFirstResponder();
+      // Scroll to the selected menu item if it's not visible on screen.
+      // This is useful for keyboard navigation and programmaticaly selecting
+      // the selected menu item, as in SelectButtonView.
+      scrollView = this.childViews[0];
+      if (scrollView) {
+        scrollOffset = scrollView.get('verticalScrollOffset');
+        itemTop = currentMenuItem.get('frame').y;
+        height = scrollView.getPath('containerView.frame').height;
+
+        if ( (itemTop < scrollOffset) || (itemTop+20 > scrollOffset+height) ) {
+          scrollView.scrollTo(0, itemTop);
+        }
+      }
     }
   }.observes('currentMenuItem'),
 
@@ -719,6 +914,17 @@ SC.MenuPane = SC.PickerPane.extend(
     return YES ;
   },
 
+  /** @private
+    Note when the mouse has entered, so that if this is a submenu,
+    the menu item to which it belongs knows whether to maintain its highlight
+    or not.
+
+    @param {Event} evt
+  */
+  mouseEntered: function(evt) {
+    this.set('mouseHasEntered', YES);
+  },
+
   keyUp: function(evt) {
     var ret = this.interpretKeyEvents(evt) ;
     return !ret ? NO : ret ;
@@ -746,6 +952,7 @@ SC.MenuPane = SC.PickerPane.extend(
     while (idx >= 0) {
       if (items[idx].get('isEnabled')) {
         this.set('currentMenuItem', items[idx]);
+        items[idx].becomeFirstResponder();
         break;
       }
       idx--;
@@ -777,6 +984,7 @@ SC.MenuPane = SC.PickerPane.extend(
     while (idx < len) {
       if (items[idx].get('isEnabled')) {
         this.set('currentMenuItem', items[idx]);
+        items[idx].becomeFirstResponder();
         break;
       }
       idx++;
@@ -832,6 +1040,7 @@ SC.MenuPane = SC.PickerPane.extend(
       title = title.replace(/ /g,'').substr(0,bufferLength).toUpperCase();
       if (title === buffer) {
         this.set('currentMenuItem', item);
+        item.becomeFirstResponder();
         break;
       }
     }
@@ -873,3 +1082,31 @@ SC._menu_fetchItem = function(k) {
   if (!k) return null ;
   return this.get ? this.get(k) : this[k] ;
 };
+
+/**
+  Default metrics for the different control sizes.
+*/
+SC.MenuPane.TINY_MENU_ITEM_HEIGHT = 10;
+SC.MenuPane.TINY_MENU_ITEM_SEPARATOR_HEIGHT = 2;
+SC.MenuPane.TINY_MENU_HEIGHT_PADDING = 2;
+SC.MenuPane.TINY_SUBMENU_OFFSET_X = 0;
+
+SC.MenuPane.SMALL_MENU_ITEM_HEIGHT = 16;
+SC.MenuPane.SMALL_MENU_ITEM_SEPARATOR_HEIGHT = 7;
+SC.MenuPane.SMALL_MENU_HEIGHT_PADDING = 4;
+SC.MenuPane.SMALL_SUBMENU_OFFSET_X = 2;
+
+SC.MenuPane.REGULAR_MENU_ITEM_HEIGHT = 20;
+SC.MenuPane.REGULAR_MENU_ITEM_SEPARATOR_HEIGHT = 9;
+SC.MenuPane.REGULAR_MENU_HEIGHT_PADDING = 6;
+SC.MenuPane.REGULAR_SUBMENU_OFFSET_X = 2;
+
+SC.MenuPane.LARGE_MENU_ITEM_HEIGHT = 60;
+SC.MenuPane.LARGE_MENU_ITEM_SEPARATOR_HEIGHT = 20;
+SC.MenuPane.LARGE_MENU_HEIGHT_PADDING = 0;
+SC.MenuPane.LARGE_SUBMENU_OFFSET_X = 4;
+
+SC.MenuPane.HUGE_MENU_ITEM_HEIGHT = 20;
+SC.MenuPane.HUGE_MENU_ITEM_SEPARATOR_HEIGHT = 9;
+SC.MenuPane.HUGE_MENU_HEIGHT_PADDING = 0;
+SC.MenuPane.HUGE_SUBMENU_OFFSET_X = 0;

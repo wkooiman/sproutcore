@@ -201,7 +201,7 @@ SC.AlertPane = SC.PanelPane.extend({
   */
   buttonThreeWrapper: SC.outlet('contentView.childViews.2'),
   
-  layout: { centerX: 0, width: 500, top: 55 },
+  layout: { top : 0.3, centerX: 0, width: 500 },
 
   /** @private - internal view that is actually displayed */
   contentView: SC.View.extend({
@@ -236,8 +236,9 @@ SC.AlertPane = SC.PanelPane.extend({
             localize: YES,
             titleMinWidth: 64,
             layout: { right: 5, height: 'auto', width: 'auto', bottom: 0 },
-            theme: 'capsule',
+            controlStyle: 'capsule',
             title: "Cancel", 
+            isCancel: YES,
             action: "dismiss",
             isVisible: NO
           }),
@@ -248,7 +249,7 @@ SC.AlertPane = SC.PanelPane.extend({
             localize: YES,
             titleMinWidth: 64,
             layout: { left: 0, height: 'auto', width: 'auto', bottom: 0 },
-            theme: 'capsule',
+            controlStyle: 'capsule',
             title: "OK", 
             isDefault: YES,
             action: "dismiss"
@@ -265,7 +266,7 @@ SC.AlertPane = SC.PanelPane.extend({
             localize: YES,
             titleMinWidth: 64,
             layout: { left: 0, height: 'auto', width: 'auto', bottom: 0 },
-            theme: 'capsule',
+            controlStyle: 'capsule',
             title: "Extra", 
             action: "dismiss",
             isVisible: NO

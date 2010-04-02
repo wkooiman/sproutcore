@@ -43,6 +43,8 @@ SC.SegmentedView = SC.View.extend(SC.Control,
   
   classNames: ['sc-segmented-view'],
   
+  controlStyle: 'square',
+  
   /**
     The value of the segmented view.
     
@@ -259,6 +261,7 @@ SC.SegmentedView = SC.View.extend(SC.Control,
     if (this._items) {
       this._items.addObserver('[]', this, this.itemContentDidChange) ;
     }
+    
     this.itemContentDidChange();
   }.observes('items'),
   
@@ -266,10 +269,15 @@ SC.SegmentedView = SC.View.extend(SC.Control,
     Invoked whenever the item array or an item in the array is changed.  This method will reginerate the list of items.
   */
   itemContentDidChange: function() {
+    this.set('renderLikeFirstTime', YES);
     this.notifyPropertyChange('displayItems');
   },
   
   init: function() {
+    var classnames = SC.clone(this.get('classNames'));
+    classnames.push(this.get('controlStyle'));
+    this.set('classNames', classnames);
+      
     sc_super();
     this.itemsDidChange() ;
   },
@@ -386,24 +394,50 @@ SC.SegmentedView = SC.View.extend(SC.Control,
   },
   
   mouseMoved: function(evt) {
-    var idx = this.displayItemIndexForEvent(evt);
-    if (this._isMouseDown) this.set('activeIndex', idx);
+    if (this._isMouseDown) {
+      var idx = this.displayItemIndexForEvent(evt);
+      this.set('activeIndex', idx);
+    }
     return YES;
   },
   
-  mouseOver: function(evt) {
+  mouseExited: function(evt) {
     // if mouse was pressed down initially, start detection again
-    var idx = this.displayItemIndexForEvent(evt);
-    if (this._isMouseDown) this.set('activeIndex', idx);
+    if (this._isMouseDown) {
+      var idx = this.displayItemIndexForEvent(evt);
+      this.set('activeIndex', idx);
+    }
     return YES;
   },
   
-  mouseOut: function(evt) {
+  mouseEntered: function(evt) {
     // if mouse was down, hide active index
-    if (this._isMouseDown) this.set('activeIndex', -1);
+    if (this._isMouseDown) {
+      var idx = this.displayItemIndexForEvent(evt);
+      this.set('activeIndex', -1);
+    }
     return YES ;
   },
   
+  touchStart: function(evt){
+    return this.mouseDown(evt);
+  },
+  
+  touchEnd: function(evt){
+    return this.mouseUp(evt);
+  },
+  
+  touchMoved: function(evt){
+    return this.mouseMoved(evt);
+  },
+  
+  touchEntered: function(evt){
+    return this.mouseEntered(evt);
+  },
+  
+  touchExited: function(evt){
+    return this.mouseExited(evt);
+  },
   /** 
     Simulates the user clicking on the segment at the specified index. This
     will update the value if possible and fire the action.
@@ -458,10 +492,10 @@ SC.SegmentedView = SC.View.extend(SC.Control,
     }
     
     // also, trigger target if needed.
-    var actionKey = this.get('itemActionKey');
-    var targetKey = this.get('itemTargetKey');
-    var action, target = null;
-    var resp = this.getPath('pane.rootResponder');
+    var actionKey = this.get('itemActionKey'),
+        targetKey = this.get('itemTargetKey'),
+        action, target = null,
+        resp = this.getPath('pane.rootResponder');
 
     if (actionKey && (item = this.get('items').objectAt(item.index))) {
       // get the source item from the item array.  use the index stored...
