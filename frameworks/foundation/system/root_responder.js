@@ -466,7 +466,6 @@ SC.RootResponder = SC.Object.extend({
   */
   setup: function() {
     this.listenFor('touchstart touchmove touchend touchcancel'.w(), document);
-
   },
   
   // ................................................................................
