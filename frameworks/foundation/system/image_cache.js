@@ -251,7 +251,7 @@ SC.imageCache = SC.Object.create(/** @scope SC.imageCache.prototype */ {
   
   /** @private deletes an entry from the image queue, descheduling also */
   _deleteEntry: function(entry) {
-    this._unscheduleEntry(entry) ;
+    this._unscheduleImageEntry(entry) ;
     delete this._images[entry.url];    
   },
   
@@ -302,16 +302,16 @@ SC.imageCache = SC.Object.create(/** @scope SC.imageCache.prototype */ {
 
     // if image is already in background queue, but now needs to be
     // foreground, simply remove from background queue....
-    if ((entry.status===this.IMAGE_QUEUE) && !isBackgroundFlag && entry.isBackground) {
+    if ((entry.status===this.IMAGE_QUEUED) && !isBackgroundFlag && entry.isBackground) {
       background[background.indexOf(entry)] = null ;
       entry.status = this.IMAGE_WAITING ;
     }
     
     // if image is not in queue already, add to queue.
-    if (entry.status!==this.IMAGE_QUEUE) {
+    if (entry.status!==this.IMAGE_QUEUED) {
       var queue = (isBackgroundFlag) ? background : foreground ;
       queue.push(entry);
-      entry.status = this.IMAGE_QUEUE ;
+      entry.status = this.IMAGE_QUEUED ;
       entry.isBackground = isBackgroundFlag ;
     }
     
@@ -327,7 +327,7 @@ SC.imageCache = SC.Object.create(/** @scope SC.imageCache.prototype */ {
   */
   _unscheduleImageEntry: function(entry) {
     // if entry is not queued, do nothing
-    if (entry.status !== this.IMAGE_QUEUE) return this ;
+    if (entry.status !== this.IMAGE_QUEUED) return this ;
     
     var queue = entry.isBackground ? this._backgroundQueue : this._foregroundQueue ;
     queue[queue.indexOf(entry)] = null; 
@@ -336,7 +336,6 @@ SC.imageCache = SC.Object.create(/** @scope SC.imageCache.prototype */ {
     // browser decides not to follow up.
     if (this._loading.indexOf(entry) >= 0) {
       queue.image.abort();
-      // this.imageStatusDidChange(entry.url, this.ABORTED);
       this.imageStatusDidChange(entry, this.ABORTED);
     }
     
@@ -345,26 +344,27 @@ SC.imageCache = SC.Object.create(/** @scope SC.imageCache.prototype */ {
   
   /** @private invoked by Image().  Note that this is the image instance */
   _imageDidAbort: function() {
-    // SC.imageCache.imageStatusDidChange(this.src, SC.imageCache.ABORTED);
+    SC.RunLoop.begin();
     SC.imageCache.imageStatusDidChange(this.entry, SC.imageCache.ABORTED);
+    SC.RunLoop.end();
   },
   
   _imageDidError: function() {
-    // SC.imageCache.imageStatusDidChange(this.src, SC.imageCache.ERROR);
+    SC.RunLoop.begin();
     SC.imageCache.imageStatusDidChange(this.entry, SC.imageCache.ERROR);
+    SC.RunLoop.end();
   },
   
   _imageDidLoad: function() {
-    // SC.imageCache.imageStatusDidChange(this.src, SC.imageCache.LOADED);
+    SC.RunLoop.begin();
     SC.imageCache.imageStatusDidChange(this.entry, SC.imageCache.LOADED);
+    SC.RunLoop.end();
   },
 
   /** @private called whenever the image loading status changes.  Notifies
     items in the queue and then cleans up the entry.
   */
-  // imageStatusDidChange: function(url, status) {
   imageStatusDidChange: function(entry, status) {
-    // var entry = this._imageEntryFor(url, NO);
     if (!entry) return; // nothing to do...
     
     var url = entry.url ;

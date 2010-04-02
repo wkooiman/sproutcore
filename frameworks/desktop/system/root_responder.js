@@ -518,12 +518,12 @@ SC.RootResponder = SC.RootResponder.extend(
       if (view && !view.get('acceptsKeyPane') 
         && !view.get('acceptsFirstResponder') ) return NO;
     }
+
     return YES;
   },
   
   mousedown: function(evt) {
     try {
-      
       if(!SC.browser.msie) window.focus();
       else if(evt.target && evt.target.focus) evt.target.focus();
       // First, save the click count. The click count resets if the mouse down

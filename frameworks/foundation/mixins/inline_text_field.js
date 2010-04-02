@@ -102,6 +102,12 @@ SC.InlineTextFieldView = SC.TextFieldView.extend(SC.DelegateSupport,
     
     var layout={}, pane, delLayout, paneElem;
     
+    this._delegate = options.delegate ;
+    var del = this._delegate ;
+    
+    // continue only if the delegate allows it
+    if (!this.invokeDelegateMethod(del, 'inlineEditorShouldBeginEditing', this)) return;
+    
     // end existing editing if necessary
     this.beginPropertyChanges();
     if (this.get('isEditing') && !this.blurEditor()) {
@@ -196,8 +202,9 @@ SC.InlineTextFieldView = SC.TextFieldView.extend(SC.DelegateSupport,
   */
   commitEditing: function() {
     // try to validate field.  If it fails, return false.  
-    if (!SC.$ok(this.validateSubmit())) return NO ;
-    return this._endEditing(this.get('value')) ;
+    var value = this.getValidatedValueFromFieldValue(NO);
+    if (SC.typeOf(value) === SC.T_ERROR) return NO;
+    return this._endEditing(value) ;
   },
   
   /**

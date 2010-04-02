@@ -279,6 +279,17 @@ test("layout {right, bottom} - assume top/left=0", function() {
   
 }) ;
 
+test("layout {right, bottom, maxWidth, maxHeight} - assume top/left=null", function() {
+
+  var layout = { right: 0.1, bottom: 0.1, maxWidth: 10, maxHeight: 10 };
+  var no_f = { x: 0, y: 0, width: 0, height: 0 } ;
+  var with_f = { x: 0, y: 0, width: 190, height: 190 } ;
+  var s = { bottom: '10%', right: '10%', top: null, left: null, maxWidth: 10, maxHeight: 10 } ;
+
+  performLayoutTest(layout, no_f, s, with_f, s) ;
+
+}) ;
+
 test("layout {centerX, centerY} - assume width/height=0", function() {
 
   var layout = { centerX: 0.1, centerY: 0.1 };

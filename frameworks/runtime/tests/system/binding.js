@@ -279,3 +279,101 @@ test("two bindings to the same value should sync in the order they are initializ
   window.a = window.b = null ;
   
 });
+
+module("AND binding", {
+
+  setup: function() {
+    // temporarily set up two source objects in the SC namespace so we can
+    // use property paths to access them
+    SC.testControllerA = SC.Object.create({ value: NO });
+    SC.testControllerB = SC.Object.create({ value: NO });
+
+    toObject = SC.Object.create({
+      value: null,
+      valueBinding: SC.Binding.and('SC.testControllerA.value', 'SC.testControllerB.value')
+    });
+  },
+
+  teardown: function() {
+    delete SC.testControllerA;
+    delete SC.testControllerB;
+  }
+  
+});
+
+test("toObject.value should be YES if both sources are YES", function() {
+  SC.RunLoop.begin();
+  SC.testControllerA.set('value', YES);
+  SC.testControllerB.set('value', YES);
+  SC.RunLoop.end();
+
+  SC.Binding.flushPendingChanges();
+  equals(toObject.get('value'), YES);
+});
+
+test("toObject.value should be NO if either source is NO", function() {
+  SC.RunLoop.begin();
+  SC.testControllerA.set('value', YES);
+  SC.testControllerB.set('value', NO);
+  SC.RunLoop.end();
+
+  SC.Binding.flushPendingChanges();
+  equals(toObject.get('value'), NO);
+
+  SC.RunLoop.begin();
+  SC.testControllerA.set('value', YES);
+  SC.testControllerB.set('value', YES);
+  SC.RunLoop.end();
+
+  SC.Binding.flushPendingChanges();
+  equals(toObject.get('value'), YES);
+
+  SC.RunLoop.begin();
+  SC.testControllerA.set('value', NO);
+  SC.testControllerB.set('value', YES);
+  SC.RunLoop.end();
+
+  SC.Binding.flushPendingChanges();
+  equals(toObject.get('value'), NO);
+});
+
+module("OR binding", {
+
+  setup: function() {
+    // temporarily set up two source objects in the SC namespace so we can
+    // use property paths to access them
+    SC.testControllerA = SC.Object.create({ value: NO });
+    SC.testControllerB = SC.Object.create({ value: null });
+
+    toObject = SC.Object.create({
+      value: null,
+      valueBinding: SC.Binding.or('SC.testControllerA.value', 'SC.testControllerB.value')
+    });
+  },
+
+  teardown: function() {
+    delete SC.testControllerA;
+    delete SC.testControllerB;
+  }
+  
+});
+
+test("toObject.value should be first value if first value is truthy", function() {
+  SC.RunLoop.begin();
+  SC.testControllerA.set('value', 'first value');
+  SC.testControllerB.set('value', 'second value');
+  SC.RunLoop.end();
+
+  SC.Binding.flushPendingChanges();
+  equals(toObject.get('value'), 'first value');
+});
+
+test("toObject.value should be second value if first is falsy", function() {
+  SC.RunLoop.begin();
+  SC.testControllerA.set('value', NO);
+  SC.testControllerB.set('value', 'second value');
+  SC.RunLoop.end();
+
+  SC.Binding.flushPendingChanges();
+  equals(toObject.get('value'), 'second value');
+});

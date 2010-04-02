@@ -79,7 +79,6 @@ require('views/view');
   @since SproutCore 1.0
 */
 SC.Pane = SC.View.extend( /** @scope SC.Pane.prototype */ {
-
   /** 
     Returns YES for easy detection of when you reached the pane. 
     @property {Boolean}
@@ -91,6 +90,8 @@ SC.Pane = SC.View.extend( /** @scope SC.Pane.prototype */ {
     @property {SC.Page}
   */
   page: null,
+  
+  theme : "sc-empty",
   
   // .......................................................
   // ROOT RESPONDER SUPPORT
@@ -187,12 +188,25 @@ SC.Pane = SC.View.extend( /** @scope SC.Pane.prototype */ {
     @returns {Object} object that handled the event
   */
   sendEvent: function(action, evt, target) {
-    var handler ;
+    var handler;
     
     // walk up the responder chain looking for a method to handle the event
     if (!target) target = this.get('firstResponder') ;
-    while(target && !target.tryToPerform(action, evt)) {
-
+    while(target) {
+      // special case 1: if touchStart && the target is already the touch responder,
+      // just return the target–don't bother sending touchStart again
+      if (action === 'touchStart' && evt.touchResponder === target) break;
+      
+      // special case 2: handle acceptsMultitouch
+      if (action === 'touchStart' && !target.get("acceptsMultitouch")) {
+        if (target.tryToPerform("touchStart", evt)) break;
+      } else if (action === 'touchEnd' && !target.get("acceptsMultitouch")) {
+        if (target.get("hasTouch")) break;
+        if (target.tryToPerform("touchEnd", evt)) break;
+      } else {
+        if (target.tryToPerform(action, evt)) break;
+      }
+      
       // even if someone tries to fill in the nextResponder on the pane, stop
       // searching when we hit the pane.
       target = (target === this) ? null : target.get('nextResponder') ;
@@ -299,7 +313,7 @@ SC.Pane = SC.View.extend( /** @scope SC.Pane.prototype */ {
         
         // even if it does have one, if it doesn't handle the event, give
         // methodName-style key equivalent handling a try
-        if (!ret) {
+        if (!ret && defaultResponder.tryToPerform) {
           ret = defaultResponder.tryToPerform(keystring, evt) ;
         }
       }

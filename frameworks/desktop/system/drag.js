@@ -25,10 +25,11 @@ SC.DRAG_AUTOSCROLL_ZONE_THICKNESS = 20;
     the drag operations. This is usually the container view that initiated 
     the drag.
   
-  - *dragView: (req)*  This should point to a view that will be used as the 
-    source image for the drag. The drag operation will clone the DOM elements 
-    for this view and parent them under the drag pane, which has the class 
-    name 'sc-ghost-view'.
+  - *dragView: *  Optional view that will be used as the source image for the
+    drag. The drag operation will clone the DOM elements for this view and
+    parent them under the drag pane, which has the class name 'sc-ghost-view'.
+    The drag view is not moved from its original location during a drag.
+    If the dragView is not provided, the source is used as dragView.
   
   - *ghost:  YES | NO*  If NO, the drag view image will show, but the source 
     dragView will not be hidden.  Set to YES to make it appear that the 
@@ -92,7 +93,8 @@ SC.Drag = SC.Object.extend(
     The drag view is not moved from its original location during a drag.
     Instead, the DOM content of the view is cloned and managed by the 
     ghostView.  If you want to visually indicate that the view is being 
-    moved, you may want to temporarily hide it during the drag.
+    moved, you should set ghost to YES.
+    If dragView is not provided the source is used instead.
     
     @readOnly
     @type SC.View
@@ -272,7 +274,13 @@ SC.Drag = SC.Object.extend(
   
   /** @private required by autoscroll */
   _dragInProgress: YES,
-  
+
+  /** @private
+    Stores the initial visibililty state of the dragView so it can be restored
+    after the drag
+  */
+  _dragViewWasVisible: null,
+
   /** @private
     This will actually start the drag process. Called by SC.Drag.start().
   */
@@ -287,26 +295,18 @@ SC.Drag = SC.Object.extend(
     var loc = { x: evt.pageX, y: evt.pageY } ;
     this.set('location', loc) ;
     
-    var dv = this.dragView ;
-    var pane = dv.get('pane') ;
+    var dv = this._getDragView() ;
     var pv = dv.get('parentView') ;
-    var clippingFrame = dv.get('clippingFrame') ;
+
     // convert to global cooridinates
-    //var f = pv ? pv.convertFrameToView(clippingFrame, null) : clippingFrame ;
-    var f = pv ? pv.convertFrameToView(dv.get('frame'), null) : dv.get('frame') ;
-    var pf = pane ? pane.get('frame') : {x:0, y: 0};
-    
-    dv.adjust({
-      top: f.y + pf.y,
-      left: f.x + pf.x,
-      width: f.width,
-      height: f.height
-    });
-    //get frame in global cords after pane adjustment
-    var dvf = dv.get('frame');
-    
-    var origin = f;//pv.convertFrameToView(dv.get('frame'), null) ;
-    
+    var origin = pv ? pv.convertFrameToView(dv.get('frame'), null) : dv.get('frame') ;
+
+    if (this.get('ghost')) {
+      // Hide the dragView
+      this._dragViewWasVisible = dv.get('isVisible') ;
+      dv.set('isVisible', NO) ;
+    }
+
     if (this.ghostActsLikeCursor) this.ghostOffset = { x: 14, y: 14 };
     else this.ghostOffset = { x: (loc.x-origin.x), y: (loc.y-origin.y) } ;
     
@@ -437,7 +437,13 @@ SC.Drag = SC.Object.extend(
 
     // destroy the ghost view
     this._destroyGhostView() ;
-    
+
+    if (this.get('ghost')) {
+      // Show the dragView if it was visible
+      if (this._dragViewWasVisible) this._getDragView().set('isVisible', YES) ;
+      this._dragViewWasVisible = null;
+    }
+
     // notify the source that everything has completed
     var source = this.source ;
     if (source && source.dragDidEnd) source.dragDidEnd(this, loc, op) ;
@@ -445,13 +451,25 @@ SC.Drag = SC.Object.extend(
     this._lastTarget = null ;
     this._dragInProgress = NO ; // required by autoscroll (invoked by a timer)
   },
-  
+
+  /** @private
+    Returns the dragView. If it is not set, the source is returned.
+  */
+  _getDragView: function() {
+    if (!this.dragView) {
+      if (!this.source || !this.source.isView) throw "Source can't be used as dragView, because it's not a view.";
+      this.dragView = this.source;
+    }
+    return this.dragView;
+  },
+
   /** @private
     This will create the ghostView and add it to the document.
   */
   _createGhostView: function() {
     var that  = this,
-        frame = this.dragView.get('frame'),
+        dragView = this._getDragView(),
+        frame = dragView.get('frame'),
         view;
         
     view = this.ghostView = SC.Pane.create({
@@ -459,9 +477,15 @@ SC.Drag = SC.Object.extend(
       layout: { top: frame.y, left: frame.x, width: frame.width, height: frame.height },
       owner: this,
       didCreateLayer: function() {
-        if (that.dragView) {
-          var layer = that.dragView.get('layer') ;
-          if (layer) this.get('layer').appendChild(layer.cloneNode(true)) ;
+        if (dragView) {
+          var layer = dragView.get('layer') ;
+          if (layer) {
+            layer = layer.cloneNode(true) ;
+            // Make sure the layer we put in the ghostView wrapper is not displaced.
+            layer.style.top = "0px" ;
+            layer.style.left = "0px" ;
+            this.get('layer').appendChild(layer) ;
+          }
         }
       }
     });
