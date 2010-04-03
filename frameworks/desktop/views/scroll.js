@@ -136,7 +136,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     
     // The following code checks if there is a calculatedWidth (collections)
     // to avoid looking at the incorrect value calculated by frame.
-    if(view.calculatedWidth && view.calculatedWidth!==0){
+    if(view && view.calculatedWidth && view.calculatedWidth!==0){
       contentWidth = view.calculatedWidth; 
     }
     contentWidth *= this._scale;
@@ -162,7 +162,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     
     // The following code checks if there is a calculatedWidth (collections)
     // to avoid looking at the incorrect value calculated by frame.
-    if(view.calculatedHeight && view.calculatedHeight!==0){
+    if(view && view.calculatedHeight && view.calculatedHeight!==0){
       contentHeight = view.calculatedHeight; 
     }
     contentHeight *= this._scale;
@@ -189,7 +189,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     
     // The following code checks if there is a calculatedWidth (collections)
     // to avoid looking at the incorrect value calculated by frame.
-    if(view.calculatedWidth && view.calculatedWidth!==0){
+    if(view && view.calculatedWidth && view.calculatedWidth!==0){
       contentWidth = view.calculatedWidth; 
     }
     contentWidth *= this._scale;
@@ -215,7 +215,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     
     // The following code checks if there is a calculatedWidth (collections)
     // to avoid looking at the incorrect value calculated by frame.
-    if(view.calculatedHeight && view.calculatedHeight!==0){
+    if(view && view.calculatedHeight && view.calculatedHeight!==0){
       contentHeight = view.calculatedHeight; 
     }
     contentHeight *= this._scale;
@@ -805,7 +805,10 @@ SC.ScrollView = SC.View.extend(SC.Border, {
   _scale_css: "",
   
   updateScale: function(scale) {
-    if (this.get("contentView").isScalable) {
+    var contentView = this.get("contentView");
+    if (!contentView) return;
+    
+    if (contentView.isScalable) {
       this.get("contentView").applyScale(scale);
       this._scale_css = "";
     } else {
