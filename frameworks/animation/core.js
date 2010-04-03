@@ -78,10 +78,6 @@ SC.Animatable = {
     this._animatable_original_didCreateLayer = this.didCreateLayer || function(){};
     this.didCreateLayer = this._animatable_didCreateLayer;
 
-    // substitute our didUpdateLayer method (but saving the old one)
-    this._animatable_original_did_update_layer = this.didUpdateLayer || function(){};
-    this.didUpdateLayer = this._animatable_did_update_layer;
-
     this._animatable_original_willDestroyLayer = this.willDestroyLayer || function(){};
     this.willDestroyLayer = this._animatable_willDestroyLayer;
     
@@ -127,10 +123,6 @@ SC.Animatable = {
       this.didCreateLayer();
       this._animatable_original_didCreateLayer = o;
       
-      o = this._animatable_original_didUpdateLayer;
-      this._animatable_original_didUpdateLayer = function(){};
-      this.didUpdateLayer();
-      this._animatable_original_didUpdateLayer = o;
     }
   },
 
@@ -730,16 +722,6 @@ SC.Animatable = {
         SC.Animatable.addTimer(this);
       }
     }
-  },
-
-  /**
-  @private
-  Overridden so that the proper styles are always set after a call to render.
-  */
-  _animatable_did_update_layer: function()
-  {
-    this._animatable_original_did_update_layer();
-    this.resetAnimation();
   },
 
   /**
