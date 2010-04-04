@@ -2462,7 +2462,7 @@ SC.CollectionView = SC.View.extend(
           slideBack: YES,
           dataSource: this
         }); 
-        
+
         // Also use this opportunity to clean up since mouseUp won't 
         // get called.
         this._cleanupMouseDown() ;
