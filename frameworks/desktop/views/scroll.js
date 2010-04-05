@@ -827,6 +827,23 @@ SC.ScrollView = SC.View.extend(SC.Border, {
   */
   acceptsMultitouch: YES,
   
+  /**
+    If YES, bouncing will always be enabled in the horizontal direction, even if the content
+    is smaller or the same size as the view. NO by default.
+  */
+  alwaysBounceHorizontal: NO,
+  
+  /**
+    If NO, bouncing will not be enabled in the vertical direction when the content is smaller
+    or the same size as the scroll view. YES by default.
+  */
+  alwaysBounceVertical: YES,
+  
+  /**
+    Whether to delay touches from passing through to the content.
+  */
+  delaysContentTouches: YES,
+  
   _applyCSSTransforms: function(layer) {
     var transform = "";
     this.updateScale(this._scale);
@@ -842,9 +859,13 @@ SC.ScrollView = SC.View.extend(SC.Border, {
   
   touchGeneration: 0,
   touchStart: function(touch) {
-    if (!this.tracking) {
-      var generation = ++this.touchGeneration;
+    var generation = ++this.touchGeneration;
+    if (!this.tracking && this.get("delaysContentTouches")) {
       this.invokeLater(this.beginTouchesInContent, 150, generation);
+    } else if (!this.tracking) {
+      // NOTE: We still have to delay because we don't want to call touchStart
+      // while touchStart is itself being called...
+      this.invokeLater(this.beginTouchesInContent, 1, generation);
     }
     this.beginTouchTracking(touch, YES);
   },
@@ -899,8 +920,8 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       notCalculated: YES,
       
       enableScrolling: { 
-        x: contentWidth * this._scale > containerWidth, 
-        y: contentHeight * this._scale > containerHeight }, // TODO: get from class properties
+        x: contentWidth * this._scale > containerWidth || this.get("alwaysBounceHorizontal"), 
+        y: contentHeight * this._scale > containerHeight || this.get("alwaysBounceVertical") }, // TODO: get from class properties
       scrolling: { x: NO, y: NO },
       
       // offsets and velocities
@@ -932,9 +953,9 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       accelerationToEdge: 0.1,
       
       // how much percent of the other drag direction you must drag to start dragging that direction too.
-      scrollTolerance: { x: 5, y: 5 },
+      scrollTolerance: { x: 15, y: 15 },
       scaleTolerance: 5,
-      secondaryScrollTolerance: 20,
+      secondaryScrollTolerance: 30,
       scrollLock: 100,
 
       // general status
@@ -1031,7 +1052,9 @@ SC.ScrollView = SC.View.extend(SC.Border, {
         touch.scrolling.y = YES; // if you scale, you can scroll.
         touch.scrolling.x = YES;
         
-        var scale = touch.startScale * (1 + (dd / 200));
+        // we want to say something that was the startDistance away from each other should now be
+        // distance away. So, if we are twice as far away as we started...
+        var scale = touch.startScale * (distance / Math.max(startDistance, 50));
 
         var newScale = this._adjustForEdgeResistance(scale, touch.minimumScale, touch.maximumScale, touch.resistanceCoefficient, touch.resistanceAsymptote);
         this.dragging = YES;
