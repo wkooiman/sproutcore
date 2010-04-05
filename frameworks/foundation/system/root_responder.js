@@ -7,7 +7,7 @@
 
 require('system/ready');
 
-SC.LOG_TOUCH_EVENTS = YES;
+SC.LOG_TOUCH_EVENTS = NO;
 
 /** @class
 
@@ -900,6 +900,10 @@ SC.RootResponder = SC.Object.extend({
           action = evt.isCancel ? "touchCancelled" : "touchEnd", a,
           responderIdx, responders, responder;
       
+      if (SC.LOG_TOUCH_EVENTS) {
+        SC.Logger.info('  -- Received touchEnd with %@ touches, %@.'.fmt(len, evt.eventPhase));
+      }
+
       for (idx = 0; idx < len; idx++) {
         //get touch+entry
         touch = touches[idx];
@@ -907,6 +911,10 @@ SC.RootResponder = SC.Object.extend({
         touchEntry.timeStamp = evt.timeStamp;
         touchEntry.pageX = touch.pageX;
         touchEntry.pageY = touch.pageY;
+        
+        if (SC.LOG_TOUCH_EVENTS) {
+          SC.Logger.info('  -- Ended one touch on %@; %@'.fmt(touchEntry.touchResponder.toString(), touchEntry.identifier));
+        }
         
         // unassign
         this.unassignTouch(touchEntry);
