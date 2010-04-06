@@ -74,7 +74,7 @@ config :standard_theme,
   :test_required  => ['sproutcore/testing'],
   :debug_required => ['sproutcore/debug']
 
-config :sc_ace, 
+config :ace, 
   :required => :empty_theme, 
   :theme_name => 'sc-theme',
   :test_required  => ['sproutcore/testing'],
@@ -95,7 +95,7 @@ config :core_tools, :required => [:desktop, :animation, :forms]
 %w(tests test_controls docs welcome).each do |app_target|
   config app_target, 
     :required => [:desktop, :core_tools],
-    :theme => :sc_ace
+    :theme => :ace
     
   # mode :debug do
   #   config app_target, :combine_javascript => false
