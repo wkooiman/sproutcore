@@ -679,7 +679,7 @@ SC.RootResponder = SC.RootResponder.extend(
       if (this._drag) {
         //IE triggers mousemove at the same time as mousedown
         if(SC.browser.msie){
-          if (this._lastMouseDownX !== evt.clientX && this._lastMouseDownY !== evt.clientY) {
+          if (this._lastMouseDownX !== evt.clientX || this._lastMouseDownY !== evt.clientY) {
             this._drag.tryToPerform('mouseDragged', evt);
           }
         }
