@@ -1198,7 +1198,7 @@ Test for CSS transition capability...
   // prepare css
   var css = "", i = null;
   for (i = 0; i < css_browsers.length; i++) {
-    css += css_browsers[i] + "transition:all 1s linear;"
+    css += css_browsers[i] + "transition:all 1s linear;";
     css += css_browsers[i] + "transform: translate3d(1px, 1px, 1px)";
   }
 
