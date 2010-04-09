@@ -354,7 +354,7 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
   routeTouch: NO,
   
   // the important one
-  touchStart: function(evt) {
+  touchStart: function(touch) {
     // calculate touch frame for later.
     this._touch_frame = this.get("parentView").convertFrameToView(this.get('frame'), null);
     
@@ -364,7 +364,7 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
     this.set('isActive', YES);
 
     if (buttonBehavior === SC.HOLD_BEHAVIOR) {
-      this._action(evt);
+      this._action(touch);
     } else if (!this._isFocused && (buttonBehavior!==SC.PUSH_BEHAVIOR)) {
       this._isFocused = YES ;
       this.becomeFirstResponder();
@@ -374,15 +374,15 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
     }
     
     // don't want to do whatever default is...
-    evt.preventDefault();
+    touch.preventDefault();
     
     return YES;
   },
   
   // is in frame
-  touchIsInBoundary: function(evt) {
+  touchIsInBoundary: function(touch) {
     var f = this._touch_frame;
-    var x = evt.pageX, y = evt.pageY;
+    var x = touch.pageX, y = touch.pageY;
     
     if (x < f.x) x = f.x - x;
     else if (x > f.x + f.width) x = x - (f.x + f.width);
@@ -411,15 +411,15 @@ SC.ButtonView = SC.View.extend(SC.Control, SC.Button, SC.StaticLayout,
   },
   
   // the important one
-  touchEnd: function(evt) {
+  touchEnd: function(touch) {
     this._touch_exited = NO;
     this.set('isActive', NO); // track independently in case isEnabled has changed
 
     if (this.get('buttonBehavior') !== SC.HOLD_BEHAVIOR) {
-      if (this.touchIsInBoundary(evt)) this._action();
+      if (this.touchIsInBoundary(touch)) this._action();
     }
     
-    evt.preventDefault();
+    touch.preventDefault();
     return YES ;
   },
   
