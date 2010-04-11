@@ -760,6 +760,9 @@ SC.RootResponder = SC.Object.extend({
   },
 
   assignTouch: function(touch, view) {
+    // sanity-check
+    if (touch.isDoneFor) throw "This touch is done for! Yet something tried to assign it.";
+    
     // unassign from old view if necessary
     if (touch.view === view) return;
     if (touch.view) {
@@ -860,7 +863,12 @@ SC.RootResponder = SC.Object.extend({
     else pane = this.get('keyPane') || this.get('mainPane') ;
 
     // if we found a valid pane, send the event to it
-    responder = (pane) ? pane.sendEvent("touchStart", touch, responder) : null ;
+    try {
+      responder = (pane) ? pane.sendEvent("touchStart", touch, responder) : null ;
+    } catch (e) {
+      SC.Logger.error("Error in touchStart: " + e);
+      responder = null;
+    }
 
     // and again, now that we have more detail.
     if (touch.touchResponder === responder) return;
@@ -957,6 +965,74 @@ SC.RootResponder = SC.Object.extend({
     // Thankfully, makeTouchResponder does exactly that: starts at the view it is supplied and keeps calling startTouch
     this.makeTouchResponder(touch, target, shouldStack);
   },
+  
+  
+  
+  /** @private
+    Artificially calls endTouch for any touch which is no longer present. This is necessary because
+    _sometimes_, WebKit ends up not sending endtouch.
+  */
+  endMissingTouches: function(presentTouches) {
+    var idx, len = presentTouches.length, map = {}, end = [];
+    
+    // make a map of what touches _are_ present
+    for (idx = 0; idx < len; idx++) {
+      map[presentTouches[idx].identifier] = YES;
+    }
+    
+    // check if any of the touches we have recorded are NOT present
+    for (idx in this._touches) {
+      var id = this._touches[idx].identifier;
+      if (!map[id]) end.push(this._touches[idx]);
+    }
+    
+    // end said touches
+    for (idx = 0, len = end.length; idx < len; idx++) {
+      this.endTouch(end[idx]);
+    }
+  },
+  
+  _touchCount: 0,
+  /** @private
+    Ends a specific touch. touchend calls this to end the internal representation of any given touch.
+  */
+  endTouch: function(touchEntry, action, evt) {
+    if (!action) action = "touchEnd";
+    
+    var responderIdx, responders, responder;
+    
+    // unassign
+    this.unassignTouch(touchEntry);
+
+    // call end for all items in chain
+    if (touchEntry.touchResponder) {
+      responders = touchEntry.touchResponders;
+      responderIdx = responders.length - 1;
+      responder = responders[responderIdx];
+      while (responder) {
+        // tell it
+        responder.tryToPerform(action, touchEntry, evt);
+
+        // next
+        responderIdx--;
+        responder = responders[responderIdx];
+        action = "touchCancelled"; // any further ones receive cancelled
+      }
+    }
+    
+    // as any of the above might have retriggered the touch temporarily, we should
+    // clear things once more just to be certain things are okay.
+    this.unassignTouch(touchEntry);
+
+    // clear responders (just to be thorough)
+    touchEntry.touchResponders = null;
+    touchEntry.touchResponder = null;
+    touchEntry.nextTouchResponder = null;
+    touchEntry.isDoneFor = YES;
+
+    // and remove from our set
+    if (this._touches[touchEntry.identifier]) delete this._touches[touchEntry.identifier];
+  },
 
   /** @private
     Called when the user touches their finger to the screen. This method
@@ -971,6 +1047,11 @@ SC.RootResponder = SC.Object.extend({
   */
   touchstart: function(evt) {
     SC.RunLoop.begin();
+    
+    // sometimes WebKit is a bit... iffy:
+    this.endMissingTouches(evt.touches);
+
+    // as you were...    
     try {
       // loop through changed touches, calling touchStart, etc.
       var idx, touches = evt.changedTouches, len = touches.length, target, view, touch, touchEntry;
@@ -1033,7 +1114,7 @@ SC.RootResponder = SC.Object.extend({
 
         // sanity-check
         if (!touchEntry) {
-          console.log("Received a touchmove for a touch we don't know about. This is bad.");
+          SC.Logger.log("Received a touchmove for a touch we don't know about. This is bad.");
           continue;
         }
 
@@ -1088,15 +1169,14 @@ SC.RootResponder = SC.Object.extend({
     SC.RunLoop.end();
     return NO;
   },
-
+  
   touchend: function(evt) {
     SC.RunLoop.begin();
     try {
       var touches = evt.changedTouches, touch, touchEntry,
           idx, len = touches.length,
           view,
-          action = evt.isCancel ? "touchCancelled" : "touchEnd", a,
-          responderIdx, responders, responder;
+          action = evt.isCancel ? "touchCancelled" : "touchEnd";
 
       for (idx = 0; idx < len; idx++) {
         //get touch+entry
@@ -1106,37 +1186,7 @@ SC.RootResponder = SC.Object.extend({
         touchEntry.pageX = touch.pageX;
         touchEntry.pageY = touch.pageY;
 
-        // unassign
-        this.unassignTouch(touchEntry);
-
-        // call end for all items in chain
-        if (touchEntry.touchResponder) {
-          responders = touchEntry.touchResponders;
-          responderIdx = responders.length - 1;
-          responder = responders[responderIdx];
-          a = action;
-          while (responder) {
-            // tell it
-            responder.tryToPerform(a, touchEntry, evt);
-
-            // next
-            responderIdx--;
-            responder = responders[responderIdx];
-            a = "touchCancelled"; // any further ones receive cancelled
-          }
-        }
-        
-        // as any of the above might have retriggered the touch temporarily, we should
-        // clear things once more just to be certain things are okay.
-        this.unassignTouch(touchEntry);
-
-        // clear responders (just to be thorough)
-        touchEntry.touchResponders = null;
-        touchEntry.touchResponder = null;
-        touchEntry.nextTouchResponder = null;
-
-        // and remove from our set
-        delete this._touches[touchEntry.identifier];
+        this.endTouch(touchEntry, action, evt);
       }
     } catch (e) {
       SC.Logger.warn('Exception during touchEnd: %@'.fmt(e)) ;
@@ -1409,7 +1459,7 @@ SC.RootResponder = SC.Object.extend({
       if (view && view.respondsTo('mouseDragged')) this._mouseCanDrag = YES ;
     } catch (e) {
 
-      console.warn('Exception during mousedown: %@'.fmt(e)) ;
+      SC.Logger.warn('Exception during mousedown: %@'.fmt(e)) ;
       this._mouseDownView = null ;
       this._mouseCanDrag = NO ;
       throw e;
