@@ -2273,7 +2273,10 @@ SC.CollectionView = SC.View.extend(
 
     // become first responder if possible.
     this.becomeFirstResponder() ;
-    this.select(contentIndex, NO);
+    
+    // invoke later so we don't slow down the touch events themselves.
+    // slowing down touch events causes weird things.
+    this.invokeLater("select", 1, contentIndex, NO);
     return YES;
   },
 
