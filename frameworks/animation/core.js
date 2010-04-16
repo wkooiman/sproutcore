@@ -652,7 +652,7 @@ SC.Animatable = {
     var newLayout = {}, updateLayout = NO, style = layer.style;
 
     // we extract the layout portion so SproutCore can do its own thing...
-    var specialTransform = "";
+    var transform = "";
     for (var i in styles)
     {
       if (i == "display") continue;
@@ -662,30 +662,29 @@ SC.Animatable = {
         // handle special case for CSS transforms
         if (this.holder._useSpecialCaseTransform && i === "left") {
           newLayout[i] = 0;
-          specialTransform += "translateX(" + styles[i] + "px) ";
+          transform += "translateX(" + styles[i] + "px) ";
           updateLayout = YES;
           continue;
         } else if (this.holder._useSpecialCaseTransform && i === "top") {
           newLayout[i] = 0;
-          specialTransform += "translateY(" + styles[i] + "px) ";
+          transform += "translateY(" + styles[i] + "px) ";
           updateLayout = YES;
           continue;
         }
-        ////**END SPECIAL TRANSFORM CASE**////
+        ////**END SPECIAL TRANSFORM CASE**///
         
         // otherwise, normal layout
         newLayout[i] = styles[i];
         updateLayout = YES;
         continue;
       }
+      else if (i == "transform") transform += " " + styles[i];
       else if (styleHelpers[i]) styleHelpers[i](style, i, styles);
       else style[i] = styles[i];
     }
     
-    // apply special case
-    if (specialTransform) {
-      style["webkitTransform"] = specialTransform;
-    }
+    // apply transform, accounting for the fact that we _might_ have had a special case
+    style["webkitTransform"] = transform;
 
     // don't want to set because we don't want updateLayout... again.
     if (updateLayout) {
@@ -1186,20 +1185,21 @@ SC.mixin(SC.Animatable, {
 Test for CSS transition capability...
 */
 (function(){
-  var allowsCSSTransforms = NO, allowsCSSTransitions = NO;
+  var allowsCSSTransforms = NO, allowsCSSTransitions = NO, allowsCSS3DTransforms = NO;
   
   // a test element
   var el = document.createElement("div");
 
   // the css and javascript to test
-  var css_browsers = ["-webkit-", "-moz-", "-o-", "-ms-"];
+  var css_browsers = ["-moz-", "-moz-", "-o-", "-ms-", "-webkit-"];
   var test_browsers = ["moz", "Moz", "o", "ms", "webkit"];
 
   // prepare css
   var css = "", i = null;
   for (i = 0; i < css_browsers.length; i++) {
     css += css_browsers[i] + "transition:all 1s linear;";
-    css += css_browsers[i] + "transform: translate3d(1px, 1px, 1px)";
+    css += css_browsers[i] + "transform: translate(1px, 1px);";
+    css += css_browsers[i] + "perspective: 500px;";
   }
 
   // set css text
@@ -1209,7 +1209,13 @@ Test for CSS transition capability...
   for (i = 0; i < test_browsers.length; i++)
   {
     if (el.style[test_browsers[i] + "TransitionProperty"] !== undefined) allowsCSSTransitions = YES;
-    if (el.style[test_browsers[i] + "Transform"] !== undefined) allowsCSSTransforms = YES;
+    if (el.style[test_browsers[i] + "Transform"] !== undefined) {
+      SC.Animatable._cssTransitionFor["transform"] =  css_browsers[i] + "transform";
+      allowsCSSTransforms = YES;
+    }
+    if (el.style[test_browsers[i]] + "Perspective" !== undefined || el.style[test_browsers[i]] + "PerspectiveProperty" !== undefined) {
+      allowsCSS3DTransforms = YES;
+    }
   }
 
 
@@ -1220,4 +1226,5 @@ Test for CSS transition capability...
   // and apply what we found
   SC.Animatable.enableCSSTransitions = allowsCSSTransitions;
   SC.Animatable.enableCSSTransforms = allowsCSSTransforms;
+  SC.Animatable.enableCSS3DTransforms = allowsCSS3DTransforms;
 })();
