@@ -862,12 +862,16 @@ SC.RootResponder = SC.Object.extend({
     if (responder) pane = responder.get('pane') ;
     else pane = this.get('keyPane') || this.get('mainPane') ;
 
-    // if we found a valid pane, send the event to it
-    try {
-      responder = (pane) ? pane.sendEvent("touchStart", touch, responder) : null ;
-    } catch (e) {
-      SC.Logger.error("Error in touchStart: " + e);
-      responder = null;
+    // if the responder is not already in the stack...
+    
+    if (stack.indexOf(responder) < 0) {
+      // if we found a valid pane, send the event to it
+      try {
+        responder = (pane) ? pane.sendEvent("touchStart", touch, responder) : null ;
+      } catch (e) {
+        SC.Logger.error("Error in touchStart: " + e);
+        responder = null;
+      }
     }
 
     // and again, now that we have more detail.
