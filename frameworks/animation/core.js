@@ -1213,13 +1213,14 @@ Test for CSS transition capability...
       SC.Animatable._cssTransitionFor["transform"] =  css_browsers[i] + "transform";
       allowsCSSTransforms = YES;
     }
-    if (el.style[test_browsers[i]] + "Perspective" !== undefined || el.style[test_browsers[i]] + "PerspectiveProperty" !== undefined) {
+    if (el.style[test_browsers[i] + "Perspective"] !== undefined || el.style[test_browsers[i] + "PerspectiveProperty"] !== undefined) {
       allowsCSS3DTransforms = YES;
     }
   }
 
-
-  // test
+  // Chrome LIES! It SAYS it supports 3D, but it doesn't. That causes all sorts of issues.
+  var is_chrome = navigator.userAgent.toLowerCase().indexOf('chrome') > -1;
+  if (is_chrome) allowsCSS3DTransforms = NO;
   
   // console.error("Supports CSS transitions: " + testResult);
 
