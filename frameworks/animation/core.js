@@ -1218,9 +1218,12 @@ Test for CSS transition capability...
     }
   }
 
-  // Chrome LIES! It SAYS it supports 3D, but it doesn't. That causes all sorts of issues.
-  var is_chrome = navigator.userAgent.toLowerCase().indexOf('chrome') > -1;
-  if (is_chrome) allowsCSS3DTransforms = NO;
+  // unfortunately, we need a bit more to know FOR SURE that 3D is allowed
+  if (window.media && window.media.matchMedium) {
+    if (!window.media.matchMedium('(-webkit-transform-3d)')) allowsCSS3DTransforms = NO;
+  } else if(window.styleMedia && window.styleMedia.matchMedium) {
+    if (!window.styleMedia.matchMedium('(-webkit-transform-3d)')) allowsCSS3DTransforms = NO;    
+  }
   
   // console.error("Supports CSS transitions: " + testResult);
 
