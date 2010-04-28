@@ -13,9 +13,11 @@
   and events are supported by the browser, allowing you to create much more
   robust apps.
 */
-
 SC.platform = {
   touch: ('createTouch' in document),
+  
+  bounceOnScroll: (/iPhone|iPad|iPod/).test(navigator.platform),
+  pinchToZoom: (/iPhone|iPad|iPod/).test(navigator.platform),
   
   input: {
     placeholder: (function() { return 'placeholder' in document.createElement('input'); })()
