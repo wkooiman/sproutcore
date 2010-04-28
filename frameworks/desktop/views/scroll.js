@@ -918,7 +918,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     var globalFrame = this.convertFrameToView(this.get("frame"), null),
         positionInContentX = (horizontalScrollOffset + (avg.x - globalFrame.x)) / this._scale,
         positionInContentY = (verticalScrollOffset + (avg.y - globalFrame.y)) / this._scale;
-    
+
     this.touch = {
       startTime: touch.timeStamp,
       notCalculated: YES,
@@ -1378,7 +1378,9 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     var self = this;
     touch.lastEventTime = Date.now();
     this.touch.timeout = setTimeout(function(){
+      SC.RunLoop.begin();
       self.decelerateAnimation();
+      SC.RunLoop.end();
     }, 10);
   },
   
