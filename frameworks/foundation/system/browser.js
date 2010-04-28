@@ -29,7 +29,7 @@ SC.browser = (function() {
     mozilla: (/mozilla/).test( userAgent ) && !(/(compatible|webkit)/).test( userAgent ) ? version : 0,
     
     /** non-zero if this is mobile safari */
-    mobileSafari: (/apple.*mobile/).test(userAgent) ? version : 0,
+    mobileSafari: (/apple.*mobile.*safari/).test(userAgent) ? version : 0,
     
     /** non-zero if we are on windows */
     windows: !!(/(windows)/).test(userAgent),
