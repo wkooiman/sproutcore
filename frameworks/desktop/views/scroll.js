@@ -443,7 +443,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
   containerView: SC.ContainerView.extend({
     contentClippingFrame: function() {
       var f = SC.clone(this.get("clippingFrame"));
-      if (SC.browser.touch) {
+      if (SC.platform.touch) {
         f.x -= f.width;
         f.width += f.width * 2;
         f.y -= f.height;
@@ -687,7 +687,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
     var vscroll = this.get('hasVerticalScroller') ? this.get('verticalScrollerView') : null ;
     var hasVertical = vscroll && this.get('isVerticalScrollerVisible') ;
     
-    if (SC.browser.touch) hasVertical = hasHorizontal = NO;
+    if (SC.platform.touch) hasVertical = hasHorizontal = NO;
     
     // get the containerView
     var clip = this.get('containerView') ;
@@ -1622,12 +1622,12 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       SC.RunLoop.end();
 
       // Use accelerated drawing if the browser supports it
-      if (SC.browser.touch) {
+      if (SC.platform.touch) {
         this._applyCSSTransforms(content.get('layer'));
       }
     }
 
-    if (container && !SC.browser.touch) {
+    if (container && !SC.platform.touch) {
       container = container.$()[0];
       
       if (container) {
