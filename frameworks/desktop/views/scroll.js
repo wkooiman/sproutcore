@@ -929,7 +929,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       },
       scrolling: { x: NO, y: NO },
       
-      enableBouncing: SC.browser.mobileSafari,
+      enableBouncing: SC.platform.bounceOnScroll,
       
       // offsets and velocities
       // startScrollOffset: { x: horizontalScrollOffset, y: verticalScrollOffset },
@@ -944,7 +944,7 @@ SC.ScrollView = SC.View.extend(SC.Border, {
       
       startScale: this._scale,
       startDistance: avg.d,
-      canScale: this.get("canScale") && SC.browser.mobileSafari,
+      canScale: this.get("canScale") && SC.platform.pinchToScale,
       minimumScale: this.get("minimumScale"),
       maximumScale: this.get("maximumScale"),
       
