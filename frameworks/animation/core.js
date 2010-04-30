@@ -582,7 +582,6 @@ SC.Animatable = {
   {
     style["opacity"] = props["opacity"];
     style["mozOpacity"] = props["opacity"]; // older Firefox?
-    style["filter"] = "alpha(opacity=" + props["opacity"] * 100 + ")";
   },
 
   /**
@@ -928,7 +927,6 @@ SC.Animatable = {
     if (this.property == "opacity")
     {
       this.style["zoom"] = 1;
-      this.style["filter"] = "alpha(opacity=" + Math.round(value * 20) * 5 + ")";
     }
 
     if (t < e) SC.Animatable.addTimer(this);
