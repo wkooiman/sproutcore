@@ -1182,7 +1182,7 @@ SC.mixin(SC.Animatable, {
       // otherwise, try to execute action direction on target or send down
       // responder chain.
       } else {
-        SC.RootResponder.responder.sendAction(callback.action, callback.target, callback.source);
+        SC.RootResponder.responder.sendAction(callback.action, callback.target, callback.source, callback.source.get("pane"), null, callback.source);
       }
     }
   }
