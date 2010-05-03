@@ -83,6 +83,9 @@ SC.Animatable = {
     
     this._animatable_original_willRemoveFromParent = this.willRemoveFromParent || function(){};
     this.willRemoveFromParent = this._animatable_will_remove_from_parent;
+    
+    // auto observers do not work when mixed in live, so make sure we do a manual observer
+    this.addObserver("style", this, "styleDidChange");
 
     // for debugging
     this._animateTickPixel.displayName = "animate-tick";
@@ -326,6 +329,14 @@ SC.Animatable = {
     }
     return timing_function;
   },
+  
+  /**
+  @private
+    Triggers updateStyle at end of run loop.
+  */
+  styleDidChange: function() {
+    this.invokeLast("updateStyle");
+  }, // observer set up manually in initMixin to allow live mixins
   
   /**
   Immediately applies styles to elements, and starts any needed transitions.
@@ -576,7 +587,7 @@ SC.Animatable = {
     // all our timers are scheduled, we should be good to go. YAY.
     return this;
 
-  }.observes("style"),
+  },
 
   _style_opacity_helper: function(style, key, props)
   {
