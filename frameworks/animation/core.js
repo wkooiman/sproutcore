@@ -494,7 +494,7 @@ SC.Animatable = {
         endingPoint[i] = newStyle[i];
 
         if (this.transitions[i].action){
-          this._transitionCallbacks[i] = {
+          this._transitionCallbacks[this._cssTransitionFor[i]] = {
             source: this,
             target: (this.transitions[i].target || this),
             action: this.transitions[i].action
