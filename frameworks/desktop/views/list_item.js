@@ -464,21 +464,35 @@ SC.ListItemView = SC.View.extend(
   
   
   _addCheckboxActiveState: function() {
-   var enabled = this.get('isEnabled');
-   this.$('.sc-checkbox-view').setClass('active', enabled);
+    if (this.get('isEnabled')) {
+      this.renderer.attr({
+        checkboxActive: YES
+      });
+      this.displayDidChange();
+    }
   },
   
   _removeCheckboxActiveState: function() {
-   this.$('.sc-checkbox-view').removeClass('active');
+   this.renderer.attr({
+     checkboxActive: NO
+   });
+   this.displayDidChange();
   },
 
   _addDisclosureActiveState: function() {
-   var enabled = this.get('isEnabled');
-   this.$('img.disclosure').setClass('active', enabled);
+    if (this.get('isEnabled')) {
+      this.renderer.attr({
+        disclosureActive: YES
+      });
+      this.displayDidChange();
+    }
   },
   
   _removeDisclosureActiveState: function() {
-   this.$('img.disclosure').removeClass('active');
+    this.renderer.attr({
+      disclosureActive: NO
+    });
+    this.displayDidChange();
   },
 
   _addRightIconActiveState: function() {
