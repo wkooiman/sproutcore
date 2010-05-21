@@ -362,7 +362,7 @@ SC.RenderContext = SC.Builder.create(/** SC.RenderContext.fn */ {
         value = styles[key];
         if (value === null) continue; // skip empty styles
         if (typeof value === SC.T_NUMBER) value = value.toString() + "px";
-        pair[0] = key.dasherize(); pair[1] = value;
+        pair[0] = key; pair[1] = value;
         joined.push(pair.join(': '));
       }
       
@@ -421,7 +421,7 @@ SC.RenderContext = SC.Builder.create(/** SC.RenderContext.fn */ {
         pair = this._STYLE_PAIR_ARRAY;
         for(key in styles) {
           if(!styles.hasOwnProperty(key)) continue ;
-          pair[0] = key.dasherize() ;
+          pair[0] = key;
           pair[1] = styles[key];
           if (pair[1] === null) continue; // skip empty styles
           
@@ -746,7 +746,7 @@ SC.RenderContext = SC.Builder.create(/** SC.RenderContext.fn */ {
           regex = this._STYLE_REGEX ;
           regex.lastIndex = 0;
           
-          while(match = regex.exec(attr)) styles[match[1].camelize()] = match[2];
+          while(match = regex.exec(attr)) styles[match[1].dasherize()] = match[2];
           
           this._styles = styles;
           this._cloneStyles = NO;
@@ -834,7 +834,9 @@ SC.RenderContext = SC.Builder.create(/** SC.RenderContext.fn */ {
   removeStyle: function(styleName) {
     // avoid case where no styles have been defined
     if (!this._styles && !this._elem) return this;
-    
+
+    styleName = styleName.dasherize();
+
     // get styles hash.  this will clone if needed.
     var styles = this.styles();
     if (styles[styleName]) {
