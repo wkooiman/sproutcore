@@ -2665,7 +2665,21 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     if (this.didEndLiveResize) this.didEndLiveResize() ;
     return this ;
   },
-  
+
+  /**
+    Setting wantsAcceleratedLayer to YES will use 3d transforms to move the
+    layer when available.
+  */
+  wantsAcceleratedLayer: NO,
+
+  /**
+    Specifies whether 3d transforms can be used to move the layer.
+  */
+  hasAcceleratedLayer: function(){
+    return this.get('wantsAcceleratedLayer') && SC.platform.translate3d;
+  }.property('wantsAcceleratedLayer').cacheable(),
+
+
   /**
     layoutStyle describes the current styles to be written to your element
     based on the layout you defined.  Both layoutStyle and frame reset when
@@ -2692,7 +2706,10 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
         lMW = layout.maxWidth,
         lMH = layout.maxHeight,
         lcX = layout.centerX, 
-        lcY = layout.centerY;
+        lcY = layout.centerY,
+        hasAcceleratedLayer = this.get('hasAcceleratedLayer'),
+        translateTop = 0,
+        translateLeft = 0;
     if (lW !== undefined && lW === SC.LAYOUT_AUTO && !stLayout) {
       error= SC.Error.desc("%@.layout() you cannot use width:auto if ".fmt(this) +
               "staticLayout is disabled","%@".fmt(this),-1);
@@ -2706,14 +2723,17 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
       console.error(error.toString()) ;
       throw error ;
     }
-    
+
     // X DIRECTION
     
     // handle left aligned and left/right
     if (!SC.none(lL)) {
       if(SC.isPercentage(lL)) {
         ret.left = (lL*100)+"%";  //percentage left
-      }else{
+      } else if (hasAcceleratedLayer && lW !== undefined) {
+        translateLeft = Math.floor(lL);
+        ret.left = 0;
+      } else {
         ret.left = Math.floor(lL); //px left
       }
       ret.marginLeft = 0 ;
@@ -2790,8 +2810,14 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
     
     // handle top aligned and left/right
     if (!SC.none(lT)) {
-      if(SC.isPercentage(lT)) ret.top = (lT*100)+"%";
-      else ret.top = Math.floor(lT);
+      if(SC.isPercentage(lT)) {
+        ret.top = (lT*100)+"%";
+      } else if (hasAcceleratedLayer && lH !== undefined) {
+        translateTop = Math.floor(lT);
+        ret.top = 0;
+      } else {
+        ret.top = Math.floor(lT);
+      }
       if (lH !== undefined) {
         if(lH === SC.LAYOUT_AUTO) ret.height = SC.LAYOUT_AUTO ;
         else if(SC.isPercentage(lH)) ret.height = (lH*100)+"%" ;
@@ -2874,7 +2900,16 @@ SC.View = SC.Responder.extend(SC.DelegateSupport,
       x = dims[loc];
       if (ret[x]===0) ret[x]=null;
     }
-    
+
+    if (hasAcceleratedLayer) {
+      // We want at least one to be non-zero
+      if (translateTop || translateLeft) {
+        ret.webkitTransform = 'translate3d('+translateLeft+'px, '+translateTop+'px, 0)';
+      } else {
+        ret.webkitTransform = 'translateZ(0px)';
+      }
+    }
+
     // convert any numbers into a number + "px".
     for(key in ret) {
       value = ret[key];

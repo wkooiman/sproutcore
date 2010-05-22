@@ -18,6 +18,19 @@ SC.platform = {
   
   bounceOnScroll: (/iPhone|iPad|iPod/).test(navigator.platform),
   pinchToZoom: (/iPhone|iPad|iPod/).test(navigator.platform),
+
+  /**
+    Checks to see if browser supports 3d transforms. We'll want 
+    to add more properties to the list as other browsers support this.
+  */
+  translate3d: (function(){
+    var properties = ['webkitPerspective'], property, idx;
+    for(idx=0; idx < properties.length; idx++) {
+      property = properties[idx];
+      if (document.body.style[property] !== undefined) return true;
+    }
+    return false;
+  })(),
   
   input: {
     placeholder: (function() { return 'placeholder' in document.createElement('input'); })()
