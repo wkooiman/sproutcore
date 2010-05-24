@@ -57,7 +57,7 @@ SC.Animatable = {
     "right": "right", "bottom": "bottom",
     "width": "width", "height": "height",
     "opacity": "opacity",
-    "transform": "transform"
+    "transform": (SC.platform.supportsCSSTransforms ? '-'+SC.platform.cssPrefix+'-transform' : "transform")
   },
 
   // properties that adjust should relay to style
@@ -357,7 +357,7 @@ SC.Animatable = {
     ////**SPECIAL TRANSFORM CASE**////
     var specialTransform = NO, specialTransformValue = "";
     if (
-      SC.Animatable.enableCSSTransforms &&
+      SC.platform.supportsCSSTransforms &&
       this.transitions["left"] && this.transitions["top"] && 
       this.transitions["left"].duration === this.transitions["top"].duration &&
       this.transitions["left"].timing === this.transitions["top"].timing &&
@@ -414,7 +414,7 @@ SC.Animatable = {
     
     // also prepare an array of CSS transitions to set up. Do this always so we get (and keep) all transitions.
     var cssTransitions = this._TMP_CSS_TRANSITIONS;
-    if (SC.Animatable.enableCSSTransitions) {
+    if (SC.platform.supportsCSSTransitions) {
       // first, handle special cases
       var timing_function;
       
@@ -487,7 +487,7 @@ SC.Animatable = {
       }
 
       // If there is an available CSS transition, use that.
-      if (SC.Animatable.enableCSSTransitions && this._cssTransitionFor[i])
+      if (SC.platform.supportsCSSTransitions && this._cssTransitionFor[i])
       {
         // the transition is already set up.
         // we can just set it as part of the starting point
@@ -1188,56 +1188,3 @@ SC.mixin(SC.Animatable, {
   }
 
 });
-
-
-/*
-Test for CSS transition capability...
-*/
-(function(){
-  var allowsCSSTransforms = NO, allowsCSSTransitions = NO, allowsCSS3DTransforms = NO;
-  
-  // a test element
-  var el = document.createElement("div");
-
-  // the css and javascript to test
-  var css_browsers = ["-moz-", "-moz-", "-o-", "-ms-", "-webkit-"];
-  var test_browsers = ["moz", "Moz", "o", "ms", "webkit"];
-
-  // prepare css
-  var css = "", i = null;
-  for (i = 0; i < css_browsers.length; i++) {
-    css += css_browsers[i] + "transition:all 1s linear;";
-    css += css_browsers[i] + "transform: translate(1px, 1px);";
-    css += css_browsers[i] + "perspective: 500px;";
-  }
-
-  // set css text
-  el.style.cssText = css;
-
-  // test
-  for (i = 0; i < test_browsers.length; i++)
-  {
-    if (el.style[test_browsers[i] + "TransitionProperty"] !== undefined) allowsCSSTransitions = YES;
-    if (el.style[test_browsers[i] + "Transform"] !== undefined) {
-      SC.Animatable._cssTransitionFor["transform"] =  css_browsers[i] + "transform";
-      allowsCSSTransforms = YES;
-    }
-    if (el.style[test_browsers[i] + "Perspective"] !== undefined || el.style[test_browsers[i] + "PerspectiveProperty"] !== undefined) {
-      allowsCSS3DTransforms = YES;
-    }
-  }
-
-  // unfortunately, we need a bit more to know FOR SURE that 3D is allowed
-  if (window.media && window.media.matchMedium) {
-    if (!window.media.matchMedium('(-webkit-transform-3d)')) allowsCSS3DTransforms = NO;
-  } else if(window.styleMedia && window.styleMedia.matchMedium) {
-    if (!window.styleMedia.matchMedium('(-webkit-transform-3d)')) allowsCSS3DTransforms = NO;    
-  }
-  
-  // console.error("Supports CSS transitions: " + testResult);
-
-  // and apply what we found
-  SC.Animatable.enableCSSTransitions = allowsCSSTransitions;
-  SC.Animatable.enableCSSTransforms = allowsCSSTransforms;
-  SC.Animatable.enableCSS3DTransforms = allowsCSS3DTransforms;
-})();
