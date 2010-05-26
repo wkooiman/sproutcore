@@ -13,19 +13,24 @@
   optionally choose the kind of animation used to transition the two scenes 
   as well if supported on the web browser.
   
-  h1. Using The View
+  h1. Using the View
   
-  To setup the scene view, you should define the 'scenes' property with an 
-  array of scene names.  These will be the properties on the scene view that
-  you can shift in an out of view as needed.  You can edit the scenes property
+  To set up the scene view, you should define the 'scenes' property with an 
+  array of scene names.  The names should correspond to properties of the scene
+  view's enclosing SC.Page that
+  you can shift in and out of view as needed.  You can edit the 'scenes' property
   at any time.  It will only be used when you start to transition from one
   scene to another.
   
-  Next you should set your nowShowing property to the name of the scene you 
+  Next you should set your 'nowShowing' property to the name of the scene you 
   would like to display.  This will cause the view to transition scenes if it
   is visible on screen.  Otherwise, it will simply make the new scene view 
-  the current content view and that's it.
-
+  the current content view.
+  
+  The views named in the 'scenes' property must be implemented as properties of
+  the top-level SC.Page that also contains your SC.SceneView.
+  They do not need to be listed in any 'childViews' array.
+  
   @extends SC.View
   @since SproutCore 1.0
 */
